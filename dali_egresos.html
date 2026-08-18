@@ -1,0 +1,162 @@
+<div class="d-flex align-items-center mb-4">
+    <span class="fa-stack me-2 ms-n1">
+        <i class="fas fa-circle fa-stack-2x text-300"></i>
+        <i class="fa-inverse fa-stack-1x text-primary fas fa-spinner"></i>
+    </span>
+    <div class="col">
+        <h5 class="mb-0 text-primary position-relative">
+            <span class="bg-200 dark__bg-1100 pe-3">Procesar Egreso por Ruta</span>
+        </h5>
+    </div>
+</div>
+<ul class="nav nav-tabs ">
+    <li class="nav-link active"><a id="procesaregresoshojaruta_li_list" href="#procesaregresoshojaruta_list"
+            data-toggle="tab">Listado de Egresos por Ruta Generados</a>
+    <li class="nav-link"><a id="procesaregresoshojaruta_li_reg" href="#procesaregresoshojaruta_reg"
+            data-toggle="tab">Procesar Egresos por Ruta</a></li>
+</ul>
+<div class="tab-content">
+    <div class="tab-pane active" id="procesaregresoshojaruta_list"><br>
+        <table id="procesaregresoshojaruta_flex_listaegresos" class="flexigrid"></table>
+    </div>
+    <div class="tab-pane" id="procesaregresoshojaruta_reg">
+        <form id="procesaregresoshojaruta_frm_cabecera" onsubmit="return false;">
+            <div class="container-fluid row mt-4">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label>Egreso Nro </label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_secuencial"
+                            name="secuencial" placeholder="" readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Fecha </label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_fecha" name="fecha"
+                            placeholder="" readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-12">
+                        <label>Bodega </label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_bodega"
+                            name="bodega" readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-12">
+                        <label>Orden </label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_orden" name="orden"
+                            readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-12">
+                        <label>Día Distribución </label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_dia" name="dia"
+                            readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Transporte </label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_placa" name="placa"
+                            readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6 mt-2"><br>
+                        <input class="form-control input-sm" type="text"
+                            id="procesaregresoshojaruta_descripciontransporte" name="descripciontransporte"
+                            readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Hoja de Ruta </label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_hojaruta"
+                            name="hojaruta" readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6 mt-4">
+                        <input class="form-control input-sm" type="text"
+                            id="procesaregresoshojaruta_descripcionhojaruta" name="descripcionhojaruta"
+                            readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Responsable de Ruta </label>
+                        <input class="form-control input-sm required" type="text"
+                            id="procesaregresoshojaruta_responsableruta" name="responsableruta" readonly="readonly"
+                            disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Estado</label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_estado"
+                            name="estado" readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-12 mt-2">
+                        <textarea class="form-control" id="procesaregresoshojaruta_observacion" name="observacion"
+                            rows="1" style="resize: none;" readonly="readonly" disabled></textarea>
+                    </div>
+                    <div class="col-md-12">
+                        <input id="procesaregresoshojaruta_codigo" name="codigo" type="hidden" />
+                        <input id="procesaregresoshojaruta_dcaestado" name="dcaestado" type="hidden" />
+                    </div>
+                    <table class="forma">
+                        <tr>
+                            <td>
+                                <table class="forma">
+                                    <tr>
+
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </form>
+        <form id="procesaregresoshojaruta_frm_detalle" onsubmit="return false;">
+            <div class="container-fluid row mt-4">
+                <div class="row mb-3">
+
+                    <legend>Asignación de Lotes</legend>
+                    <div class="col-md-6">
+                        <label>Grupo</label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_grupo" name="grupo"
+                            readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Producto</label>
+                        <input class="form-control input-sm" type="text" id="procesaregresoshojaruta_producto"
+                            name="producto" readonly="readonly" disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label>Lote</label>
+                        <select class="form-select" id="procesaregresoshojaruta_lote" name="lote"
+                            class="required"></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label>Cantidad</label>
+                        <input min="1" class="form-control input-sm required number" type="text"
+                            id="procesaregresoshojaruta_cantidad" name="cantidad" class="required" />
+                    </div>
+                    <div class="col-md-6">
+                        <input id="procesaregresoshojaruta_dmbcodigoorigen" name="dmbcodigoorigen" type="hidden" />
+                        <input id="procesaregresoshojaruta_dmbcodigodestino" name="dmbcodigodestino" type="hidden" />
+                        <input id="procesaregresoshojaruta_pgecodigo" name="pgecodigo" type="hidden" />
+                        <input id="procesaregresoshojaruta_pescodigo" name="pescodigo" type="hidden" />
+                        <input id="procesaregresoshojaruta_saldo" name="saldo" type="hidden" />
+                    </div>
+                    <div class="col-md-12"> <br></div>
+                    <div class="col-md-8">
+                        <table id="procesaregresoshojaruta_flex_detalle_egreso" class="flexigrid"></table>
+                    </div>
+                    <div class="col-md-4">
+                        <table id="procesaregresoshojaruta_flex_detalle_lote" class="flexigrid"></table>
+                    </div>
+
+                    <div class="col-md-12 mt-4">
+                        <button class="btn btn-success me-1 mb-1" id="procesaregresoshojaruta_procesar"
+                            class="frm_btn Procesar">Procesar</button>
+                        <!-- <td><button id="procesaregresoshojaruta_pdf" class="frm_btn PDF">Imprimir</button></td> -->
+                        <button class="btn btn-secondary me-1 mb-1" id="procesaregresoshojaruta_cancelar"
+                            class="frm_btn Cancelar">Cancelar</button>
+                    </div>
+
+
+
+                </div>
+            </div>
+        </form>
+
+
+    </div>
+</div>
+<script type="text/javascript"
+    src="?option=load&amp;module=logistica&amp;file=procesaregresohojaruta&amp;type=js"></script>

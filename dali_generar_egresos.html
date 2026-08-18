@@ -1,0 +1,126 @@
+<div class="d-flex align-items-center mb-4">
+    <span class="fa-stack me-2 ms-n1">
+        <i class="fas fa-circle fa-stack-2x text-300"></i>
+        <i class="fa-inverse fa-stack-1x text-primary fas fa-spinner"></i>
+    </span>
+    <div class="col">
+        <h5 class="mb-0 text-primary position-relative">
+            <span class="bg-200 dark__bg-1100 pe-3">Generar Egreso por Ruta</span>            
+        </h5>
+    </div>
+</div>
+<ul class="nav nav-tabs ">
+    <li  class="nav-link active"><a id="egresoshojaruta_li_list" href="#egresoshojaruta_list" data-toggle="tab">Listado de Egresos por Ruta</a>
+    <li class="nav-link"><a id="egresoshojaruta_li_reg" href="#egresoshojaruta_reg" data-toggle="tab">Registro de Egresos por Ruta</a></li>
+</ul>
+<div class="tab-content">
+    <div class="tab-pane active" id="egresoshojaruta_list"><br>
+        <table id="egresoshojaruta_flex_listaegresos" class="flexigrid"></table>
+    </div>
+    <div class="tab-pane" id="egresoshojaruta_reg">
+        <form id="egresoshojaruta_frm_cabecera" onsubmit="return false;">
+            <div class="container-fluid row mt-4">
+                <div class="row mb-3">
+                    <div class="col-md-6">                            
+                        <label>Egreso Nro </label>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_secuencial" name="secuencial" placeholder="" readonly="readonly" disabled
+                        />
+                    </div>
+                    <div class="col-md-6"> 
+                        <label>Fecha </label>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_fecha" name="fecha" placeholder="" readonly="readonly" disabled
+                        />                            
+                    </div>
+                    <div class="col-md-6">
+                        <label>Bodega </label>
+                        <select class="form-select" id="egresoshojaruta_bodega" name="bodega" class="required"></select>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_bodegadescripcion" name="bodegadescripcion" style='display: none;' readonly/>
+                    </div>
+                    <div class="col-md-6">
+                        <label>Orden </label>
+                        <select class="form-select" id="egresoshojaruta_orden" name="orden" class="required"></select>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_ordendescripcion" name="ordendescripcion" style='display: none;' readonly/>
+                    </div>
+                    <div class="col-md-12">
+                        <label>Día Distribución </label>
+                        <select class="form-select" id="egresoshojaruta_dia" name="dia" class="required"></select>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_diadescripcion" name="diadescripcion" style='display: none;'readonly/>
+                    </div>
+                    <div class="col-md-6">
+                        <label>Transporte </label>
+                        <select class="form-select" id="egresoshojaruta_placa" name="placa" class="required"></select>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_placadescripcion" name="placadescripcion" style='display: none;'readonly="readonly" disabled/>                            
+                    </div>                        
+                    <div class="col-md-6 mt-2"><br>                                                   
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_descripciontransporte" name="descripciontransporte" readonly="readonly" disabled/>
+                    </div>
+                    <div class="col-md-6">
+                        <label>Hoja de Ruta </label>
+                        <select class="form-select" id="egresoshojaruta_hojaruta" name="hojaruta" class="required"></select>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_sechojarutadescripcion" name="sechojarutadescripcion" style='display: none;'readonly="readonly" disabled/>                            
+                    </div>
+                    <div class="col-md-6 mt-2"><br>
+                        <input class="form-control input-sm" type="text" id="egresoshojaruta_descripcionhojaruta" name="descripcionhojaruta" readonly="readonly" disabled/>
+                    </div>
+                    <div class="col-md-12">
+                        <label>Responsable de Ruta </label>
+                        <input class="form-control input-sm required" type="text" id="egresoshojaruta_responsableruta" name="responsableruta"/>
+                    </div>
+                    <div class="col-md-12"><br>
+                        <textarea class="form-control" id="egresoshojaruta_observacion" name="observacion" rows="1" placeholder="Observación" style="resize: none;"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <input id="egresoshojaruta_codigo" name="codigo" type="hidden" />
+                    </div>
+                </div>  
+            </div>
+        </form>
+       <form id="egresoshojaruta_frm_detalle" onsubmit="return false;">
+            <div class="container-fluid row mt-2">
+                <div class="row mb-3">
+                    <div class="col-md-12" style="text-align: center;">
+                        <legend>Ajustar Asignación de Producto</legend>
+                    </div>
+                    <div class="col-md-6">
+                        <label>Grupo</label>
+                        <input type="text" class="form-control input-sm" id="egresoshojaruta_grupo" name="grupo" readonly disabled>
+                    </div>
+                    <div class="col-md-6">
+                        <label>Producto</label>
+                        <select class="form-select" id="egresoshojaruta_producto" name="producto" class="required" ></select>                       
+                    </div>
+                    <div class="col-md-6">
+                        <label>Saldo</label>
+                        <input type="text" class="form-control input-sm" id="egresoshojaruta_saldo" name="saldo" readonly disabled/>
+                    </div>                   
+                    <div class="col-md-6">
+                        <label>Cantidad </label>
+                        <input type="text"  class="form-control input-sm" id="egresoshojaruta_cantidad" name="cantidad" readonly disabled/>
+                    </div>
+                    <div class="col-md-12">                            
+                        <input id="egresoshojaruta_dbmcodigo" name="dbmcodigo" type="hidden"/>
+                        <input id="egresoshojaruta_pgecodigo" name="pgecodigo" type="hidden"/>
+                        <input id="egresoshojaruta_pescodigo" name="pescodigo" type="hidden"/>
+                        <input id="egresoshojaruta_cantidadreq" name="cantidadreq" type="hidden"/>
+                        <input id="egresoshojaruta_saldofaltante" name="saldofaltante" type="hidden"/>
+                        <input id="egresoshojaruta_rowid" name="rowid" type="hidden"/>
+                    </div>                     
+                    <div class="col-md-12 mt-3">                        
+                        <table id="egresoshojaruta_flex_detalle_egreso" class="flexigrid"></table>
+                    </div>  
+                </div>
+            </div>
+        </form> 
+        <div class="container-fluid row mt-2">
+            <div class="row mb-3">
+                <div class="col-md-12"><br><br>
+                    <button class="btn btn-success me-1 mb-1" id="egresoshojaruta_guardar" class="frm_btn Guardar">Guardar</button>
+                    <button class="btn btn-primary me-1 mb-1" id="egresoshojaruta_pdf" class="frm_btn PDF">Estiba</button>
+                    <button class="btn btn-primary me-1 mb-1" id="egresoshojaruta_pdf_definicion" class="frm_btn PDF">Definición</button>
+                    <button class="btn btn-secondary me-1 mb-1" id="egresoshojaruta_cancelar" class="frm_btn Cancelar">Cancelar</button>
+                </div>
+            </div>
+        </div>     
+    </div>
+</div>
+<script type="text/javascript" src="?option=load&amp;module=logistica&amp;file=generaregresohojaruta&amp;type=js"></script>
