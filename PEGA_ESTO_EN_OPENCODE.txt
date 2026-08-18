@@ -1,0 +1,6 @@
+Copia desde aqui hasta el final y pegalo en OpenCode de casa:
+===========================================
+
+Hola, estoy en el proyecto LOTES AUTOMATICOS. Primero lee el archivo AGENTS.md para entender el contexto del proyecto. Luego pregunta que se debe hacer segun el estado actual documentado. El proyecto esta en GitHub: https://github.com/djtechcool-create/LOTES-AUTOMATICOS
+
+===========================================
