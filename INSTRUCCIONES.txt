@@ -1,0 +1,35 @@
+===========================================
+   LOTES AUTOMATICOS - INSTRUCCIONES
+===========================================
+
+PROYECTO:
+https://github.com/djtechcool-create/LOTES-AUTOMATICOS
+
+===========================================
+PARA CONTINUAR EN CASA (primera vez):
+===========================================
+
+1. Instalar Git (si no lo tienes):
+   https://git-scm.com/download/win
+
+2. Abrir OpenCode
+
+3. Escribir estos comandos:
+   git clone https://github.com/djtechcool-create/LOTES-AUTOMATICOS.git
+   cd LOTES-AUTOMATICOS
+
+4. Ya puedes trabajar en el proyecto
+
+===========================================
+CADA DÍA (flujo de trabajo):
+===========================================
+
+EN EL TRABAJO (antes de irte):
+   git add .
+   git commit -m "escribe qué hiciste"
+   git push
+
+EN CASA (cuando llegues):
+   git pull
+
+===========================================
