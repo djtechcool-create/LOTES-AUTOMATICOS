@@ -1,7 +1,7 @@
 Copia desde aqui hasta el final y pegalo en OpenCode de casa:
 ===========================================
 
-Hola, estoy en el proyecto LOTES AUTOMATICOS. 
+Hola, estoy en el proyecto LOTES AUTOMATICOS.
 
 1. Primero lee el archivo AGENTS.md para entender TODO el contexto del proyecto.
 2. Lee tambien el archivo dali_procesar_egreso.js que contiene el JS de la pagina de egresos de DALI.

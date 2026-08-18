@@ -9,27 +9,48 @@ https://github.com/djtechcool-create/LOTES-AUTOMATICOS
 PARA CONTINUAR EN CASA (primera vez):
 ===========================================
 
-1. Instalar Git (si no lo tienes):
-   https://git-scm.com/download/win
+PASO 1: Instalar Git (si no lo tienes):
+   Ve a https://git-scm.com/download/win
+   Descargalo y dale "Next" en todo
 
-2. Abrir OpenCode
+PASO 2: Abrir la terminal:
+   Presiona Windows + R
+   Escribe: cmd
+   Dale Enter
 
-3. Clonar el proyecto (pegar estos comandos):
+PASO 3: Clonar el proyecto (copia y pega esto en la terminal):
    git clone https://github.com/djtechcool-create/LOTES-AUTOMATICOS.git
+
+PASO 4: Entrar a la carpeta del proyecto:
    cd LOTES-AUTOMATICOS
 
-4. Ya puedes trabajar en el proyecto
+PASO 5: Abrir OpenCode y pegar las instrucciones
+   Abre OpenCode
+   Abre el archivo PEGA_ESTO_EN_OPENCODE.txt que esta en la carpeta
+   Copia todo el texto
+   Pegalo en OpenCode
 
 ===========================================
-CADA DÍA (flujo de trabajo):
+CADA DIA (flujo de trabajo):
 ===========================================
 
 EN EL TRABAJO (antes de irte):
    git add .
-   git commit -m "escribe qué hiciste"
+   git commit -m "escribe que hiciste"
    git push
 
 EN CASA (cuando llegues):
+   cd LOTES-AUTOMATICOS
    git pull
+
+===========================================
+QUE HACE CADA COMANDO:
+===========================================
+
+git clone = Descarga el proyecto por primera vez
+git pull = Actualiza el proyecto con los ultimos cambios
+git add . = Selecciona todos los cambios para guardar
+git commit -m "mensaje" = Guarda los cambios con un mensaje
+git push = Sube los cambios a GitHub
 
 ===========================================
