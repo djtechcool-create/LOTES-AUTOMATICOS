@@ -1,0 +1,141 @@
+================================================================================
+INSTRUCCIONES PARA CONTINUAR EL PROYECTO EN LA PC DEL TRABAJO
+================================================================================
+
+Copia y pega TODO este texto en OpenCode en la PC del trabajo.
+
+--------------------------------------------------------------------------------
+
+Hola, necesito que leas este archivo para entender el proyecto y luego ejecutes
+los pasos que se indican al final. El archivo completo esta en:
+
+C:\Users\alfon\OneDrive - Krezcocargo SAS\OTRO\APPS\LASF\CONTINUAR_EN_TRABAJO.txt
+
+--------------------------------------------------------------------------------
+CONTEXTO DEL PROYECTO
+--------------------------------------------------------------------------------
+
+Proyecto: LOTES-AUTOMATICOS
+Repo: https://github.com/djtechcool-create/LOTES-AUTOMATICOS
+Objetivo: Automatizar la carga de egresos en DALI (sistema de logistica web).
+
+El usuario procesa 40-50 referencias diarias en DALI. El proceso manual toma
+3-4 horas. Con esta app deberia tomar 20-30 minutos.
+
+STACK:
+- Python 3 + Flask (interfaz web local)
+- Selenium + Chrome (automatizacion web)
+- pandas + openpyxl (Excel)
+- fuzzywuzzy (matching de nombres)
+
+CREDENCIALES DALI:
+- URL: https://sistemapae.nutri.com.ec/
+- Usuario: azapata
+- Password: 1753112158
+
+ARCHIVOS PRINCIPALES:
+- app.py -> Servidor Flask, orquesta todo el flujo
+- automator/dali_client.py -> Cliente Selenium, login + JSON APIs
+- automator/excel_reader.py -> Lee Excel del dia
+- automator/matcher.py -> Matching fuzzy Excel vs DALI
+- automator/report.py -> Genera reportes .txt
+- mapping.json -> Cache de matches exitosos (en .gitignore, local)
+- templates/index.html -> Interfaz web oscura con Bootstrap
+- AGENTS.md -> Documentacion completa del proyecto
+
+FLUJO DE PROCESAMIENTO:
+1. Login a DALI via Selenium (requests.Session no sirve, necesita cookies JS)
+2. Leer Excel del dia, filtrar solo tipo="salida"
+3. Para cada referencia del Excel:
+   a. Buscar egreso en DALI cuya HOJA RUTA termina en esa referencia
+   b. Cargar productos del egreso (JSON 2094)
+   c. Para cada producto: hacer match fuzzy con el Excel
+   d. Asignar lote + cantidad (JSON 2096)
+   e. Procesar/finalizar egreso (JSON 2099)
+4. Generar reporte con los resultados
+
+JSON ENDPOINTS DE DALI (todos POST a /?option=json con parametro "json"):
+- 2093: Lista egresos generados
+- 2091: Carga datos de un egreso (param: mbocodigo)
+- 2094: Carga productos de un egreso (param: mbocodigo)
+- 2092: Carga lotes disponibles (param: dmbcodigo)
+- 2095: Verifica lotes asignados (param: mbocodigo, pgecodigo, pescodigo)
+- 2096: Asigna lote a producto (param: dmborigen, dmbdestino, ilocodigo, cantidad)
+- 2097: Elimina lote asignado (param: dmborigen, dmbdestino)
+- 2099: Procesa/finaliza egreso (param: mbocodigo)
+
+VARIABLE UI: Es un JavaScript global (ahora valor 43) que se establece despues
+del login. Se necesita para todas las llamadas JSON. El dali_client.py lo obtiene
+ejecutando JS en el navegador.
+
+IMPORTANTES:
+- FlexiGrid de egresos solo muestra los ultimos ~10. Hay que buscar por HR usando
+  flexOptions({qtype:'HOJ', query:ref}) + flexReload()
+- Usar SALDO del JSON 2094, NO la cantidad del Excel
+- Los nombres NO coinciden exactamente entre Excel y DALI (usar fuzzy matching)
+- El mapping.json guarda matches exitosos para reusar
+- Si asignar_lote falla (stock insuficiente), NO reintentar otro lote automaticamente
+- Reportar al usuario cuales fallaron para que el decida
+
+ESTADOS DEL REPORTE:
+- ok: Egreso asignado y procesado correctamente
+- skip: Ya estaba procesado, se salto
+- error: Algun producto fallo (sin match, sin lote, asignacion fallida)
+- review: Todos los productos con SALDO=0 (ya asignados en sesion anterior,
+  requieren solo que el usuario revise y ejecute "Procesar" en DALI)
+
+--------------------------------------------------------------------------------
+PASOS A EJECUTAR AHORA
+--------------------------------------------------------------------------------
+
+1. Actualizar el repositorio:
+   git pull
+
+2. Verificar que todo este actualizado:
+   git log --oneline -5
+   git status
+
+3. Verificar que las dependencias esten instaladas:
+   pip install flask selenium pandas openpyxl fuzzywuzzy python-Levenshtein
+
+4. Probar que la app arranca:
+   python app.py
+
+5. Abrir el navegador en http://localhost:5000
+
+6. Subir el Excel del dia y probar con pocas referencias primero (5-10)
+
+7. Si hay errores, revisar los archivos de investigacion que estan en la raiz:
+   - dali_procesar_egreso.js (el mas importante, explica como funciona DALI)
+   - dali_generar_egreso.js
+   - dali_core.js
+
+8. Si todo funciona bien, hacer commit y push:
+   git add .
+   git commit -m "descripcion del cambio"
+   git push
+
+--------------------------------------------------------------------------------
+NOTAS ADICIONALES
+--------------------------------------------------------------------------------
+
+- El usuario NO quiere hacer nada manual. Si algo falla, reportarlo en el
+  reporte para que el decida, pero NO pausar la ejecucion.
+
+- El usuario procesa 40-50 referencias diarias. La app debe ser rapida.
+
+- El Chrome se abre visible para que el usuario pueda ver que pasa.
+
+- Los reports se guardan en la carpeta reportes/ (en .gitignore)
+
+- El mapping.json tambien esta en .gitignore, es local a cada PC.
+
+- Si hay un Excel nuevo, guardarlo con el nombre:
+  KrezcoCargo Trazabilidad YYYY-MM-DD HHMM.xlsx
+
+- El usuario tiene dos PCs (casa y trabajo). Ambas usan el mismo repo.
+  Si hace cambios en una, debe hacer push para que la otra los reciba.
+
+================================================================================
+FIN DE INSTRUCCIONES
+================================================================================
