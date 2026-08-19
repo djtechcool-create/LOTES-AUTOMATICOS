@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOTES AUTOMATICOS - KrezcoCargo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #1a1d23; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+        .card { background: #252830; border: 1px solid #363a45; }
+        .card-header { background: #2d3139; border-bottom: 1px solid #363a45; font-weight: 600; }
+        .btn-primary { background: #3b82f6; border-color: #3b82f6; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #22c55e; border-color: #22c55e; }
+        .btn-success:hover { background: #16a34a; }
+        .log-box { background: #111318; border: 1px solid #363a45; border-radius: 6px;
+                   padding: 12px; height: 400px; overflow-y: auto; font-family: 'Consolas', monospace;
+                   font-size: 13px; line-height: 1.5; }
+        .log-entry { color: #94a3b8; }
+        .log-entry.error { color: #f87171; }
+        .log-entry.success { color: #4ade80; }
+        .log-entry.info { color: #60a5fa; }
+        .progress-container { height: 24px; }
+        .ref-list { max-height: 300px; overflow-y: auto; }
+        .ref-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; }
+        .ref-item:hover { background: #363a45; }
+        .ref-item.selected { background: #1e3a5f; }
+        h1 { font-size: 1.5rem; }
+        .badge-ok { background: #22c55e; }
+        .badge-err { background: #ef4444; }
+        .badge-skip { background: #eab308; }
+    </style>
+</head>
+<body>
+    <div class="container py-3">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h1 class="mb-0">LOTES AUTOMATICOS</h1>
+            <span class="badge bg-secondary">KrezcoCargo - DALI</span>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header">Archivo Excel</div>
+                    <div class="card-body">
+                        <select id="excelSelect" class="form-select mb-3">
+                            <option value="">Cargando archivos...</option>
+                        </select>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span id="refCount" class="text-muted">0 referencias</span>
+                            <button id="btnSelectAll" class="btn btn-sm btn-outline-secondary">Seleccionar todas</button>
+                        </div>
+                        <div id="refList" class="ref-list border rounded p-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-7">
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Procesamiento</span>
+                        <span id="statusBadge" class="badge bg-secondary">Listo</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress progress-container mb-3">
+                            <div id="progressBar" class="progress-bar" style="width: 0%">0 / 0</div>
+                        </div>
+                        <button id="btnProcess" class="btn btn-success w-100" disabled>INICIAR PROCESAMIENTO</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">Log de Ejecucion</div>
+                    <div class="card-body p-2">
+                        <div id="logBox" class="log-box">
+                            <div class="log-entry info">Eslecciona un archivo Excel y presiona INICIAR...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="resultCard" class="card mt-3 d-none">
+                    <div class="card-header">Resultado</div>
+                    <div class="card-body" id="resultBody"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedRefs = new Set();
+        let allRefs = [];
+
+        async function loadExcels() {
+            const res = await fetch('/api/excels');
+            const data = await res.json();
+            const sel = document.getElementById('excelSelect');
+            sel.innerHTML = '';
+            if (data.length === 0) {
+                sel.innerHTML = '<option value="">No se encontraron archivos Excel</option>';
+                return;
+            }
+            data.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.path;
+                opt.textContent = `${f.name} (${(f.size/1024).toFixed(0)} KB)`;
+                sel.appendChild(opt);
+            });
+            loadReferences(data[0].path);
+        }
+
+        async function loadReferences(excelPath) {
+            if (!excelPath) return;
+            const res = await fetch(`/api/references?excel=${encodeURIComponent(excelPath)}`);
+            const data = await res.json();
+            if (data.error) { alert(data.error); return; }
+            allRefs = data.references;
+            selectedRefs = new Set(allRefs);
+            renderRefs();
+        }
+
+        function renderRefs() {
+            const list = document.getElementById('refList');
+            list.innerHTML = '';
+            allRefs.forEach(ref => {
+                const div = document.createElement('div');
+                div.className = 'ref-item' + (selectedRefs.has(ref) ? ' selected' : '');
+                div.textContent = ref;
+                div.onclick = () => {
+                    if (selectedRefs.has(ref)) selectedRefs.delete(ref);
+                    else selectedRefs.add(ref);
+                    div.classList.toggle('selected');
+                    document.getElementById('refCount').textContent = `${selectedRefs.size} / ${allRefs.length} seleccionadas`;
+                    updateBtn();
+                };
+                list.appendChild(div);
+            });
+            document.getElementById('refCount').textContent = `${selectedRefs.size} / ${allRefs.length} seleccionadas`;
+        }
+
+        function updateBtn() {
+            document.getElementById('btnProcess').disabled = selectedRefs.size === 0;
+        }
+
+        document.getElementById('excelSelect').onchange = function() {
+            loadReferences(this.value);
+        };
+
+        document.getElementById('btnSelectAll').onclick = function() {
+            if (selectedRefs.size === allRefs.length) {
+                selectedRefs.clear();
+            } else {
+                selectedRefs = new Set(allRefs);
+            }
+            renderRefs();
+            updateBtn();
+        };
+
+        document.getElementById('btnProcess').onclick = async function() {
+            const excelPath = document.getElementById('excelSelect').value;
+            if (!excelPath) return;
+
+            this.disabled = true;
+            this.textContent = 'PROCESANDO...';
+            document.getElementById('statusBadge').textContent = 'Procesando';
+            document.getElementById('statusBadge').className = 'badge bg-warning';
+            document.getElementById('resultCard').classList.add('d-none');
+            document.getElementById('logBox').innerHTML = '';
+
+            const res = await fetch('/api/process', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({excel: excelPath, refs: Array.from(selectedRefs)})
+            });
+            const data = await res.json();
+            if (data.error) {
+                alert(data.error);
+                resetBtn();
+                return;
+            }
+
+            startSSE();
+        };
+
+        function startSSE() {
+            const evtSource = new EventSource('/api/stream');
+            evtSource.onmessage = function(event) {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'log') {
+                    addLog(msg.message);
+                } else if (msg.type === 'progress') {
+                    updateProgress(msg.data);
+                } else if (msg.type === 'done') {
+                    evtSource.close();
+                    document.getElementById('statusBadge').textContent = 'Completado';
+                    document.getElementById('statusBadge').className = 'badge bg-success';
+                    resetBtn();
+                } else if (msg.type === 'error') {
+                    addLog('ERROR: ' + msg.message);
+                    evtSource.close();
+                    document.getElementById('statusBadge').textContent = 'Error';
+                    document.getElementById('statusBadge').className = 'badge bg-danger';
+                    resetBtn();
+                } else if (msg.type === 'finished') {
+                    evtSource.close();
+                    if (document.getElementById('statusBadge').textContent === 'Procesando') {
+                        document.getElementById('statusBadge').textContent = 'Completado';
+                        document.getElementById('statusBadge').className = 'badge bg-success';
+                    }
+                    resetBtn();
+                    loadResults();
+                }
+            };
+            evtSource.onerror = function() {
+                evtSource.close();
+                setTimeout(loadResults, 1000);
+                resetBtn();
+            };
+        }
+
+        function addLog(msg) {
+            const box = document.getElementById('logBox');
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            if (msg.includes('ERROR')) div.className += ' error';
+            else if (msg.includes('exitosamente') || msg.includes('PROCESADO')) div.className += ' success';
+            else if (msg.startsWith('===') || msg.startsWith('---')) div.className += ' info';
+            div.textContent = msg;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function updateProgress(data) {
+            const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+            document.getElementById('progressBar').style.width = pct + '%';
+            document.getElementById('progressBar').textContent = `${data.current} / ${data.total} - Ref: ${data.current_ref}`;
+        }
+
+        function resetBtn() {
+            const btn = document.getElementById('btnProcess');
+            btn.disabled = false;
+            btn.textContent = 'INICIAR PROCESAMIENTO';
+            updateBtn();
+        }
+
+        async function loadResults() {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            if (data.result) {
+                showResults(data.result);
+            }
+        }
+
+        function showResults(result) {
+            if (result.error) {
+                document.getElementById('resultCard').classList.remove('d-none');
+                document.getElementById('resultBody').innerHTML = `<div class="text-danger">${result.error}</div>`;
+                return;
+            }
+            if (!result.results) return;
+            const results = result.results;
+            const ok = results.filter(r => r.status === 'ok').length;
+            const err = results.filter(r => r.status === 'error').length;
+            const skip = results.filter(r => r.status === 'skip').length;
+            let html = `<div class="d-flex gap-3 mb-2">
+                <span class="badge badge-ok">OK: ${ok}</span>
+                <span class="badge badge-err">Error: ${err}</span>
+                <span class="badge badge-skip">Saltados: ${skip}</span>
+            </div>`;
+            if (result.report_path) {
+                html += `<div class="text-muted small mt-2">Reporte: ${result.report_path}</div>`;
+            }
+            document.getElementById('resultCard').classList.remove('d-none');
+            document.getElementById('resultBody').innerHTML = html;
+        }
+
+        loadExcels();
+    </script>
+</body>
+</html>

@@ -29,3 +29,5 @@ login_page.html
 login_response.html
 dali_login_fail.html
 dali_custom.js
+mapping.json
+reportes/
