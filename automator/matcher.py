@@ -41,7 +41,9 @@ def match_product(excel_name, dali_products, threshold=60):
     best_match = None
 
     for i, nd in enumerate(norm_dali):
-        score = fuzz.token_sort_ratio(norm_excel, nd)
+        score_sort = fuzz.token_sort_ratio(norm_excel, nd)
+        score_set = fuzz.token_set_ratio(norm_excel, nd)
+        score = max(score_sort, score_set)
         if score > best_score:
             best_score = score
             best_match = dali_list[i]

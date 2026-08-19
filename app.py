@@ -140,6 +140,7 @@ def process_egresos(excel_path, selected_refs=None):
                 dmb = dali_prod["DMB_CODIGO"]
                 pge = dali_prod["PGE_CODIGO"]
                 pes = dali_prod["PES_CODIGO"]
+                saldo = int(dali_prod.get("SALDO", 0) or 0)
 
                 # Obtener lotes disponibles
                 available = client.cargar_lotes_disponibles(dmb)
@@ -147,6 +148,11 @@ def process_egresos(excel_path, selected_refs=None):
                 if not available:
                     log_callback(f"    Sin lotes disponibles")
                     fail_detail.append({"excel": excel_name, "error": "Sin lotes"})
+                    continue
+
+                if saldo <= 0:
+                    log_callback(f"    SALDO=0, ya asignado todo")
+                    fail_detail.append({"excel": excel_name, "error": "Sin saldo"})
                     continue
 
                 # Seleccionar lote
@@ -167,17 +173,17 @@ def process_egresos(excel_path, selected_refs=None):
                     chosen_v = str(available[0].get("V", ""))
                     chosen_t = str(available[0].get("T", ""))
 
-                log_callback(f"    Lote: {chosen_t}")
+                log_callback(f"    Lote: {chosen_t} Cant: {saldo} (Excel: {excel_cant})")
 
-                # Asignar lote via JSON directo
-                client.asignar_lote(dmb, chosen_v, excel_cant)
+                # Asignar lote via JSON directo - usar SALDO de DALI, no cantidad del Excel
+                client.asignar_lote(dmb, chosen_v, saldo)
                 assigned_count += 1
                 result_detail.append({
                     "excel": excel_name,
                     "dali": match_name,
                     "score": score,
                     "lote": chosen_t,
-                    "cantidad": excel_cant,
+                    "cantidad": saldo,
                 })
 
             log_callback(f"  Asignados: {assigned_count}/{len(excel_products)}")
