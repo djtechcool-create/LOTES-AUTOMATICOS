@@ -9,40 +9,34 @@ def generate_report(results, excel_file):
     report_path = os.path.join(report_dir, f"reporte_{timestamp}.txt")
 
     lines = []
-    lines.append("=" * 70)
-    lines.append(f"REPORTE DE EGRESOS - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append(f"Archivo Excel: {excel_file}")
-    lines.append("=" * 70)
+    lines.append(f"REPORTE - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    lines.append(f"Excel: {os.path.basename(excel_file)}")
 
     procesados = [r for r in results if r["status"] == "ok"]
-    no_procesados = [r for r in results if r["status"] != "ok"]
+    saltados = [r for r in results if r["status"] == "skip"]
+    fallidos = [r for r in results if r["status"] == "error"]
 
-    lines.append(f"\nRESUMEN:")
-    lines.append(f"  Total referencias: {len(results)}")
-    lines.append(f"  Procesados: {len(procesados)}")
-    lines.append(f"  No procesados: {len(no_procesados)}")
-
-    if no_procesados:
-        lines.append(f"\n--- REFERENCIAS NO PROCESADAS ---")
-        for r in no_procesados:
-            lines.append(f"\n  Referencia: {r['referencia']}")
-            lines.append(f"  Error: {r.get('error', 'Desconocido')}")
-            if "productos_fallidos" in r:
-                for pf in r["productos_fallidos"]:
-                    lines.append(f"    - {pf['excel']} -> {pf.get('error', 'sin match')}")
+    lines.append(f"\nOK: {len(procesados)} | SALTADOS: {len(saltados)} | ERRORES: {len(fallidos)}")
 
     if procesados:
-        lines.append(f"\n--- REFERENCIAS PROCESADAS ---")
+        lines.append(f"\n--- OK ---")
         for r in procesados:
-            lines.append(f"\n  Referencia: {r['referencia']}")
-            lines.append(f"  Egreso DALI: {r.get('egreso_code', 'N/A')}")
-            lines.append(f"  Productos asignados: {r.get('productos_asignados', 0)}")
-            if "productos_detallado" in r:
-                for pd_item in r["productos_detallado"]:
-                    lines.append(f"    - {pd_item['excel']} -> {pd_item['dali']} (score: {pd_item['score']}, lote: {pd_item.get('lote', 'N/A')})")
+            lines.append(f"  {r['referencia']} ({r.get('productos_asignados',0)} productos)")
 
-    lines.append("\n" + "=" * 70)
+    if fallidos:
+        lines.append(f"\n--- ERRORES ---")
+        for r in fallidos:
+            lines.append(f"\n  {r['referencia']}: {r.get('error','?')}")
+            if "productos_fallidos" in r:
+                for pf in r["productos_fallidos"]:
+                    lines.append(f"    - {pf['excel']}: {pf.get('error','?')}")
 
+    if saltados:
+        lines.append(f"\n--- SALTADOS (ya procesados) ---")
+        for r in saltados:
+            lines.append(f"  {r['referencia']}")
+
+    lines.append("")
     content = "\n".join(lines)
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(content)
