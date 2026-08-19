@@ -132,59 +132,54 @@ def process_egresos(excel_path, selected_refs=None):
                     fail_detail.append({"excel": excel_name, "error": "Sin match"})
                     continue
 
-                dali_prod = next((p for p in dali_products if p["PRODUCTO"] == match_name), None)
-                if not dali_prod:
+                # Buscar TODOS los productos DALI que matcheen (pueden ser 2 con mismo nombre)
+                matching_prods = [p for p in dali_products if p["PRODUCTO"] == match_name]
+                if not matching_prods:
                     fail_detail.append({"excel": excel_name, "error": "No encontrado"})
                     continue
 
-                dmb = dali_prod["DMB_CODIGO"]
-                pge = dali_prod["PGE_CODIGO"]
-                pes = dali_prod["PES_CODIGO"]
-                saldo = int(dali_prod.get("SALDO", 0) or 0)
+                for dali_prod in matching_prods:
+                    dmb = dali_prod["DMB_CODIGO"]
+                    pge = dali_prod["PGE_CODIGO"]
+                    pes = dali_prod["PES_CODIGO"]
+                    saldo = int(dali_prod.get("SALDO", 0) or 0)
 
-                # Obtener lotes disponibles
-                available = client.cargar_lotes_disponibles(dmb)
+                    if saldo <= 0:
+                        log_callback(f"    DMB={dmb} SALDO=0, saltando")
+                        continue
 
-                if not available:
-                    log_callback(f"    Sin lotes disponibles")
-                    fail_detail.append({"excel": excel_name, "error": "Sin lotes"})
-                    continue
+                    available = client.cargar_lotes_disponibles(dmb)
+                    if not available:
+                        log_callback(f"    DMB={dmb} Sin lotes disponibles")
+                        continue
 
-                if saldo <= 0:
-                    log_callback(f"    SALDO=0, ya asignado todo")
-                    fail_detail.append({"excel": excel_name, "error": "Sin saldo"})
-                    continue
+                    chosen_v = None
+                    chosen_t = None
+                    if excel_lote:
+                        el = str(excel_lote).strip()
+                        for lote in available:
+                            v = str(lote.get("V", "")).strip()
+                            t = str(lote.get("T", ""))
+                            if v == el or el in t:
+                                chosen_v = v
+                                chosen_t = t
+                                break
 
-                # Seleccionar lote
-                chosen_v = None
-                chosen_t = None
+                    if chosen_v is None:
+                        chosen_v = str(available[0].get("V", ""))
+                        chosen_t = str(available[0].get("T", ""))
 
-                if excel_lote:
-                    el = str(excel_lote).strip()
-                    for lote in available:
-                        v = str(lote.get("V", "")).strip()
-                        t = str(lote.get("T", ""))
-                        if v == el or el in t:
-                            chosen_v = v
-                            chosen_t = t
-                            break
-
-                if chosen_v is None:
-                    chosen_v = str(available[0].get("V", ""))
-                    chosen_t = str(available[0].get("T", ""))
-
-                log_callback(f"    Lote: {chosen_t} Cant: {saldo} (Excel: {excel_cant})")
-
-                # Asignar lote via JSON directo - usar SALDO de DALI, no cantidad del Excel
-                client.asignar_lote(dmb, chosen_v, saldo)
-                assigned_count += 1
-                result_detail.append({
-                    "excel": excel_name,
-                    "dali": match_name,
-                    "score": score,
-                    "lote": chosen_t,
-                    "cantidad": saldo,
-                })
+                    log_callback(f"    DMB={dmb} Lote: {chosen_t} Cant: {saldo}")
+                    client.asignar_lote(dmb, chosen_v, saldo)
+                    assigned_count += 1
+                    result_detail.append({
+                        "excel": excel_name,
+                        "dali": match_name,
+                        "dmb": dmb,
+                        "score": score,
+                        "lote": chosen_t,
+                        "cantidad": saldo,
+                    })
 
             log_callback(f"  Asignados: {assigned_count}/{len(excel_products)}")
 
