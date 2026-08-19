@@ -6,55 +6,144 @@ def generate_report(results, excel_file):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
     report_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reportes")
     os.makedirs(report_dir, exist_ok=True)
-    report_path = os.path.join(report_dir, f"reporte_{timestamp}.txt")
-
-    lines = []
-    lines.append(f"REPORTE - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    lines.append(f"Excel: {os.path.basename(excel_file)}")
 
     procesados = [r for r in results if r["status"] == "ok"]
     saltados = [r for r in results if r["status"] == "skip"]
     fallidos = [r for r in results if r["status"] == "error"]
     revision = [r for r in results if r["status"] == "review"]
 
-    lines.append(f"\nOK: {len(procesados)} | SALTADOS: {len(saltados)} | ERRORES: {len(fallidos)} | REVISAR: {len(revision)}")
-
-    if procesados:
-        lines.append(f"\n--- OK ---")
-        for r in procesados:
-            lines.append(f"  {r['referencia']} ({r.get('productos_asignados',0)} productos)")
+    # === REPORTE GENERAL ===
+    general_path = os.path.join(report_dir, f"reporte_{timestamp}.txt")
+    general_lines = []
+    general_lines.append("=" * 60)
+    general_lines.append(f"REPORTE GENERAL - {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    general_lines.append(f"Excel: {os.path.basename(excel_file)}")
+    general_lines.append("=" * 60)
+    general_lines.append("")
+    general_lines.append("RESUMEN:")
+    general_lines.append(f"  OK:        {len(procesados)} egresos ({sum(r.get('productos_asignados',0) for r in procesados)} productos)")
+    general_lines.append(f"  ERRORES:   {len(fallidos)} egresos")
+    general_lines.append(f"  SALTADOS:  {len(saltados)} egresos (ya procesados)")
+    general_lines.append(f"  REVISAR:   {len(revision)} egresos (asignados sin procesar)")
+    general_lines.append("")
 
     if fallidos:
-        lines.append(f"\n--- ERRORES ---")
+        general_lines.append("-" * 60)
+        general_lines.append("ERRORES DETALLADOS:")
+        general_lines.append("-" * 60)
         for r in fallidos:
-            lines.append(f"\n  {r['referencia']}: {r.get('error','?')}")
-            if "productos_fallidos" in r:
+            general_lines.append("")
+            general_lines.append(f"  Egreso {r.get('egreso_code','?')} - Ref {r['referencia']}:")
+            general_lines.append(f"    Error general: {r.get('error','?')}")
+            if "productos_fallidos" in r and r["productos_fallidos"]:
+                general_lines.append(f"    Productos con error:")
                 for pf in r["productos_fallidos"]:
-                    lines.append(f"    - {pf['excel']}: {pf.get('error','?')}")
+                    general_lines.append(f"      - {pf.get('excel','?')} -> {pf.get('dali','?')} (DMB={pf.get('dmb','?')})")
+                    general_lines.append(f"        Error: {pf.get('error','?')}")
+                    if pf.get("lote"):
+                        general_lines.append(f"        Lote intentado: {pf['lote']}")
             if "sin_stock" in r and r["sin_stock"]:
-                lines.append(f"    Sin stock / SALDO=0:")
+                general_lines.append(f"    Productos sin lote o sin stock:")
                 for ss in r["sin_stock"]:
-                    lines.append(f"    - {ss['excel']}: {ss.get('error','?')} (DMB={ss.get('dmb','')})")
+                    general_lines.append(f"      - {ss.get('excel','?')} -> {ss.get('dali','?')} (DMB={ss.get('dmb','?')})")
+                    general_lines.append(f"        Razon: {ss.get('error','?')}")
+        general_lines.append("")
 
     if revision:
-        lines.append(f"\n--- REVISAR (requieren procesamiento) ---")
-        lines.append(f"  Estos egresos ya tienen lotes asignados pero no fueron procesados.")
-        lines.append(f"  Revisar en DALI y ejecutar 'Procesar' manualmente.")
+        general_lines.append("-" * 60)
+        general_lines.append("REVISAR (requieren procesamiento manual):")
+        general_lines.append("-" * 60)
         for r in revision:
-            lines.append(f"\n  {r['referencia']} (egreso: {r.get('egreso_code','?')})")
-            if "sin_stock" in r and r["sin_stock"]:
-                lines.append(f"    Productos con SALDO=0 (ya asignados):")
-                for ss in r["sin_stock"]:
-                    lines.append(f"    - {ss['excel']} -> {ss.get('dali','?')} (DMB={ss.get('dmb','')})")
+            general_lines.append(f"  Egreso {r.get('egreso_code','?')} - Ref {r['referencia']}")
+        general_lines.append("")
+
+    if procesados:
+        general_lines.append("-" * 60)
+        general_lines.append("OK:")
+        general_lines.append("-" * 60)
+        for r in procesados:
+            general_lines.append(f"  Ref {r['referencia']} - Egreso {r.get('egreso_code','?')} ({r.get('productos_asignados',0)} productos)")
 
     if saltados:
-        lines.append(f"\n--- SALTADOS (ya procesados) ---")
+        general_lines.append("")
+        general_lines.append("-" * 60)
+        general_lines.append(f"SALTADOS ({len(saltados)} - ya procesados):")
+        general_lines.append("-" * 60)
         for r in saltados:
-            lines.append(f"  {r['referencia']}")
+            general_lines.append(f"  Ref {r['referencia']}")
 
-    lines.append("")
-    content = "\n".join(lines)
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    general_lines.append("")
+    general_content = "\n".join(general_lines)
+    with open(general_path, "w", encoding="utf-8") as f:
+        f.write(general_content)
 
-    return report_path, content
+    # === REPORTE DE ERRORES ===
+    error_path = os.path.join(report_dir, f"reporte_errores_{timestamp}.txt")
+    error_lines = []
+    error_lines.append("=" * 60)
+    error_lines.append(f"REPORTE DE ERRORES - {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    error_lines.append(f"Excel: {os.path.basename(excel_file)}")
+    error_lines.append("=" * 60)
+
+    if fallidos:
+        for r in fallidos:
+            error_lines.append("")
+            error_lines.append(f"EGRESO {r.get('egreso_code','?')} - Ref {r['referencia']}")
+            error_lines.append(f"  Error: {r.get('error','?')}")
+            if "productos_fallidos" in r and r["productos_fallidos"]:
+                error_lines.append(f"  Detalle por producto:")
+                for pf in r["productos_fallidos"]:
+                    error_lines.append(f"")
+                    error_lines.append(f"    Producto Excel:  {pf.get('excel','?')}")
+                    error_lines.append(f"    Producto DALI:   {pf.get('dali','?')}")
+                    error_lines.append(f"    Codigo DMB:     {pf.get('dmb','?')}")
+                    error_lines.append(f"    Lote intentado: {pf.get('lote','N/A')}")
+                    error_lines.append(f"    Error:          {pf.get('error','?')}")
+                    error_lines.append(f"    Accion:         Producto sin asignar")
+            if "sin_stock" in r and r["sin_stock"]:
+                error_lines.append(f"  Productos sin lote/disponibles:")
+                for ss in r["sin_stock"]:
+                    error_lines.append(f"")
+                    error_lines.append(f"    Producto Excel:  {ss.get('excel','?')}")
+                    error_lines.append(f"    Producto DALI:   {ss.get('dali','?')}")
+                    error_lines.append(f"    Codigo DMB:     {ss.get('dmb','?')}")
+                    error_lines.append(f"    Razon:          {ss.get('error','?')}")
+                    error_lines.append(f"    Accion:         Producto saltado")
+    else:
+        error_lines.append("")
+        error_lines.append("No hubo errores.")
+
+    error_lines.append("")
+    error_content = "\n".join(error_lines)
+    with open(error_path, "w", encoding="utf-8") as f:
+        f.write(error_content)
+
+    # === REPORTE DE EXITOS ===
+    ok_path = os.path.join(report_dir, f"reporte_ok_{timestamp}.txt")
+    ok_lines = []
+    ok_lines.append("=" * 60)
+    ok_lines.append(f"REPORTE DE EXITOS - {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    ok_lines.append(f"Excel: {os.path.basename(excel_file)}")
+    ok_lines.append("=" * 60)
+
+    total_productos = 0
+    for r in procesados:
+        ok_lines.append("")
+        ok_lines.append(f"EGRESO {r.get('egreso_code','?')} - Ref {r['referencia']}")
+        detail = r.get("productos_detalle", [])
+        for d in detail:
+            total_productos += 1
+            ok_lines.append(f"  {d.get('excel','?')}")
+            ok_lines.append(f"    Excel: {d.get('lote_excel','?')}  ->  DALI: {d.get('lote_dali','?')}  (OK)")
+        ok_lines.append(f"  Total: {len(detail)} productos")
+
+    ok_lines.append("")
+    ok_lines.append("-" * 60)
+    ok_lines.append(f"RESUMEN: {total_productos} productos OK en {len(procesados)} egresos")
+    ok_lines.append("-" * 60)
+    ok_lines.append("")
+    ok_content = "\n".join(ok_lines)
+    with open(ok_path, "w", encoding="utf-8") as f:
+        f.write(ok_content)
+
+    return general_path, general_content

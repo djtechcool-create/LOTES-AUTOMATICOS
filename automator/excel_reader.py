@@ -29,6 +29,22 @@ def get_references(df_salidas):
     return [str(r) for r in refs]
 
 
+def get_references_with_dates(df_salidas):
+    grouped = df_salidas.groupby("Referencia")
+    result = []
+    for ref, group in grouped:
+        fecha = group["Fecha"].iloc[0]
+        if pd.notna(fecha):
+            try:
+                fecha_str = pd.to_datetime(fecha).strftime("%d/%m/%Y")
+            except Exception:
+                fecha_str = str(fecha)
+        else:
+            fecha_str = ""
+        result.append({"ref": str(ref), "date": fecha_str})
+    return result
+
+
 def get_products_for_reference(df_salidas, referencia):
     ex = df_salidas[df_salidas["Referencia"].astype(str) == referencia].copy()
     products = {}

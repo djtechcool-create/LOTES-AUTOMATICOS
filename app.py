@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from flask import Flask, render_template, request, jsonify, Response
 from config import FLASK_HOST, FLASK_PORT
 from automator.dali_client import DaliClient
-from automator.excel_reader import read_excel, get_references, get_products_for_reference
+from automator.excel_reader import read_excel, get_references, get_references_with_dates, get_products_for_reference
 from automator.matcher import match_product
 from automator.report import generate_report
 
@@ -22,6 +22,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 processing_state = {
     "running": False,
+    "stop_requested": False,
     "logs": [],
     "progress": {"current": 0, "total": 0, "current_ref": ""},
     "result": None,
@@ -37,6 +38,7 @@ def log_callback(msg):
 def process_egresos(excel_path, selected_refs=None):
     state = processing_state
     state["running"] = True
+    state["stop_requested"] = False
     state["logs"] = []
     state["progress"] = {"current": 0, "total": 0, "current_ref": ""}
     state["result"] = None
@@ -72,6 +74,10 @@ def process_egresos(excel_path, selected_refs=None):
         state["progress"]["total"] = len(refs)
 
         for i, ref in enumerate(refs):
+            if state["stop_requested"]:
+                log_callback("DETENIDO POR EL USUARIO")
+                break
+
             state["progress"]["current"] = i + 1
             state["progress"]["current_ref"] = ref
             state["queue"].put(("progress", state["progress"]))
@@ -198,7 +204,8 @@ def process_egresos(excel_path, selected_refs=None):
                             "dali": match_name,
                             "dmb": dmb,
                             "score": score,
-                            "lote": chosen_t,
+                            "lote_excel": el,
+                            "lote_dali": chosen_t,
                             "cantidad": saldo,
                         })
                     else:
@@ -230,6 +237,7 @@ def process_egresos(excel_path, selected_refs=None):
                         "status": "ok",
                         "egreso_code": mbo_codigo,
                         "productos_asignados": assigned_count,
+                        "productos_detalle": result_detail,
                     })
                 else:
                     reason = []
@@ -265,7 +273,10 @@ def process_egresos(excel_path, selected_refs=None):
             "report_path": report_path,
             "report_content": report_content,
         }
-        state["queue"].put(("done", state["result"]))
+        if state["stop_requested"]:
+            state["queue"].put(("stopped", state["result"]))
+        else:
+            state["queue"].put(("done", state["result"]))
 
     except Exception as e:
         log_callback(f"ERROR FATAL: {str(e)}")
@@ -300,8 +311,10 @@ def get_refs():
         return jsonify({"error": "Excel no encontrado"}), 400
     try:
         df = read_excel(excel_path)
-        refs = get_references(df)
-        return jsonify({"references": refs, "count": len(refs)})
+        refs_data = get_references_with_dates(df)
+        refs = [r["ref"] for r in refs_data]
+        dates = {r["ref"]: r["date"] for r in refs_data}
+        return jsonify({"references": refs, "dates": dates, "count": len(refs)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -335,6 +348,14 @@ def get_status():
     })
 
 
+@app.route("/api/stop", methods=["POST"])
+def stop_processing():
+    if not processing_state["running"]:
+        return jsonify({"error": "No hay proceso en ejecucion"}), 400
+    processing_state["stop_requested"] = True
+    return jsonify({"status": "stopping"})
+
+
 @app.route("/api/stream")
 def stream():
     def generate():
@@ -347,6 +368,9 @@ def stream():
                     yield f"data: {json.dumps({'type': 'progress', 'data': msg_data})}\n\n"
                 elif msg_type == "done":
                     yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    break
+                elif msg_type == "stopped":
+                    yield f"data: {json.dumps({'type': 'stopped'})}\n\n"
                     break
                 elif msg_type == "error":
                     yield f"data: {json.dumps({'type': 'error', 'message': msg_data})}\n\n"

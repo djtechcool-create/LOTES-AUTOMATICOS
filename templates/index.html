@@ -23,9 +23,13 @@
         .log-entry.info { color: #60a5fa; }
         .progress-container { height: 24px; }
         .ref-list { max-height: 300px; overflow-y: auto; }
-        .ref-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; user-select: none; }
+        .ref-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; user-select: none; color: #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
         .ref-item:hover { background: #363a45; }
         .ref-item.selected { background: #1e3a5f; }
+        .ref-date { color: #94a3b8; font-size: 12px; }
+        .ref-search { background: #111318; border: 1px solid #363a45; color: #e0e0e0; border-radius: 4px; padding: 4px 8px; width: 100%; margin-bottom: 8px; font-size: 13px; }
+        .ref-search::placeholder { color: #6b7280; }
+        .ref-search:focus { outline: none; border-color: #3b82f6; }
         h1 { font-size: 1.5rem; }
         .badge-ok { background: #22c55e; }
         .badge-err { background: #ef4444; }
@@ -73,6 +77,7 @@
                         <span id="refCount" class="text-muted small">0</span>
                     </div>
                     <div class="card-body p-2">
+                        <input type="text" id="refSearch" class="ref-search" placeholder="Buscar referencia..." oninput="filterRefs()">
                         <div class="d-flex gap-2 mb-2">
                             <button id="btnSelectAll" class="btn btn-sm btn-outline-secondary flex-fill">Todas</button>
                             <button id="btnSelectNone" class="btn btn-sm btn-outline-secondary flex-fill">Ninguna</button>
@@ -94,6 +99,9 @@
                         </div>
                         <button id="btnProcess" class="btn btn-success w-100" disabled>
                             INICIAR PROCESAMIENTO
+                        </button>
+                        <button id="btnStop" class="btn btn-danger w-100 mt-2" style="display:none">
+                            DETENER PROCESO
                         </button>
                     </div>
                 </div>
@@ -118,6 +126,7 @@
     <script>
         let selectedRefs = new Set();
         let allRefs = [];
+        let refDates = {};
         let currentExcelPath = null;
 
         const fileDrop = document.getElementById('fileDrop');
@@ -150,6 +159,7 @@
             const data = await res.json();
             if (data.error) { alert(data.error); return; }
             allRefs = data.references;
+            refDates = data.dates || {};
             selectedRefs = new Set(allRefs);
             document.getElementById('refCard').style.display = 'block';
             renderRefs();
@@ -158,11 +168,19 @@
 
         function renderRefs() {
             const list = document.getElementById('refList');
+            const searchTerm = document.getElementById('refSearch').value.trim().toLowerCase();
             list.innerHTML = '';
-            allRefs.forEach(ref => {
+            const filtered = searchTerm ? allRefs.filter(ref => ref.toLowerCase().includes(searchTerm)) : allRefs;
+            filtered.forEach(ref => {
                 const div = document.createElement('div');
                 div.className = 'ref-item' + (selectedRefs.has(ref) ? ' selected' : '');
-                div.textContent = ref;
+                const refText = document.createElement('span');
+                refText.textContent = ref;
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'ref-date';
+                dateSpan.textContent = refDates[ref] || '';
+                div.appendChild(refText);
+                div.appendChild(dateSpan);
                 div.onclick = () => {
                     if (selectedRefs.has(ref)) selectedRefs.delete(ref);
                     else selectedRefs.add(ref);
@@ -173,6 +191,10 @@
                 list.appendChild(div);
             });
             document.getElementById('refCount').textContent = `${selectedRefs.size} / ${allRefs.length}`;
+        }
+
+        function filterRefs() {
+            renderRefs();
         }
 
         function updateBtn() {
@@ -186,6 +208,7 @@
             if (!currentExcelPath) return;
             this.disabled = true;
             this.textContent = 'PROCESANDO...';
+            document.getElementById('btnStop').style.display = 'block';
             document.getElementById('statusBadge').textContent = 'Procesando - mira Chrome';
             document.getElementById('statusBadge').className = 'badge bg-warning text-dark';
             document.getElementById('resultCard').classList.add('d-none');
@@ -201,6 +224,12 @@
             startSSE();
         };
 
+        document.getElementById('btnStop').onclick = async function() {
+            this.disabled = true;
+            this.textContent = 'DETENIENDO...';
+            await fetch('/api/stop', { method: 'POST' });
+        };
+
         function startSSE() {
             const evtSource = new EventSource('/api/stream');
             evtSource.onmessage = function(event) {
@@ -208,6 +237,7 @@
                 if (msg.type === 'log') addLog(msg.message);
                 else if (msg.type === 'progress') updateProgress(msg.data);
                 else if (msg.type === 'done') { evtSource.close(); finish('Completado', 'bg-success'); }
+                else if (msg.type === 'stopped') { evtSource.close(); finish('Detenido por usuario - reportes generados', 'bg-warning text-dark'); }
                 else if (msg.type === 'error') { addLog('ERROR: ' + msg.message); evtSource.close(); finish('Error', 'bg-danger'); }
                 else if (msg.type === 'finished') { evtSource.close(); finish('Listo', 'bg-secondary'); }
             };
@@ -243,6 +273,10 @@
             const btn = document.getElementById('btnProcess');
             btn.disabled = false;
             btn.textContent = 'INICIAR PROCESAMIENTO';
+            const btnStop = document.getElementById('btnStop');
+            btnStop.style.display = 'none';
+            btnStop.disabled = false;
+            btnStop.textContent = 'DETENER PROCESO';
             updateBtn();
         }
 
