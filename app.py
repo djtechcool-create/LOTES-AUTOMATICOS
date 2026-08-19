@@ -184,14 +184,28 @@ def process_egresos(excel_path, selected_refs=None):
             log_callback(f"  Asignados: {assigned_count}/{len(excel_products)}")
 
             if assigned_count > 0:
-                client.procesar_egreso()
-                results.append({
-                    "referencia": ref,
-                    "status": "ok",
-                    "egreso_code": mbo_codigo,
-                    "productos_asignados": assigned_count,
-                    "productos_detallado": result_detail,
-                })
+                procesado = client.procesar_egreso()
+                if procesado and not fail_detail:
+                    results.append({
+                        "referencia": ref,
+                        "status": "ok",
+                        "egreso_code": mbo_codigo,
+                        "productos_asignados": assigned_count,
+                    })
+                else:
+                    reason = []
+                    if not procesado:
+                        reason.append("Proceso falllo en DALI")
+                    if fail_detail:
+                        reason.append(f"{len(fail_detail)} productos sin asignar")
+                    results.append({
+                        "referencia": ref,
+                        "status": "error",
+                        "error": "; ".join(reason),
+                        "egreso_code": mbo_codigo,
+                        "productos_asignados": assigned_count,
+                        "productos_fallidos": fail_detail,
+                    })
             else:
                 results.append({
                     "referencia": ref,
