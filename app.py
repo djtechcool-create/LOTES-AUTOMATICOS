@@ -163,19 +163,30 @@ def process_egresos(excel_path, selected_refs=None):
 
                     chosen_v = None
                     chosen_t = None
-                    if excel_lote:
-                        el = str(excel_lote).strip()
-                        for lote in available:
-                            v = str(lote.get("V", "")).strip()
-                            t = str(lote.get("T", ""))
-                            if v == el or el in t:
-                                chosen_v = v
-                                chosen_t = t
-                                break
+                    if not excel_lote:
+                        log_callback(f"    DMB={dmb} Sin lote en Excel, saltando")
+                        sin_stock_detail.append({
+                            "excel": excel_name, "dali": match_name,
+                            "dmb": dmb, "error": "Sin lote en Excel"
+                        })
+                        continue
+
+                    el = str(excel_lote).strip()
+                    for lote in available:
+                        v = str(lote.get("V", "")).strip()
+                        t = str(lote.get("T", ""))
+                        if v == el or el in t:
+                            chosen_v = v
+                            chosen_t = t
+                            break
 
                     if chosen_v is None:
-                        chosen_v = str(available[0].get("V", ""))
-                        chosen_t = str(available[0].get("T", ""))
+                        log_callback(f"    Lote '{el}' no encontrado en lotes disponibles")
+                        fail_detail.append({
+                            "excel": excel_name, "dali": match_name,
+                            "dmb": dmb, "error": f"Lote '{el}' no encontrado en DALI"
+                        })
+                        continue
 
                     log_callback(f"    DMB={dmb} Lote: {chosen_t} (Saldo = {saldo}) Cant: {saldo}")
                     ok = client.asignar_lote(dmb, chosen_v, saldo)
