@@ -100,13 +100,17 @@ class DaliClient:
         raise Exception("UI no se pudo definir. Verifica conexion a DALI.")
 
     def navigate_to_egresos(self):
-        self._log("Navegando a Procesar Egreso por Ruta...")
-        url = f"{self.base}/?option=load&module=logistica&file=procesaregresohojaruta&type=html"
-        self.driver.get(url)
-        time.sleep(5)
-        self._log("Pagina de Procesar Egreso cargada")
-        self._wait_for_ui()
-        self._log(f"URL: {self.driver.current_url}")
+        self._log("Cargando pagina de Procesar Egreso via loadContent()...")
+        self.driver.execute_script("""
+            loadContent(
+                '/?option=load&module=logistica&file=procesaregresohojaruta&type=html',
+                'Procesar Egreso por Ruta'
+            );
+        """)
+        self._log("Esperando a que la pagina cargue...")
+        time.sleep(8)
+        url = self.driver.current_url
+        self._log(f"URL actual: {url}")
 
     def _js(self, script, *args):
         return self.driver.execute_script(script, *args)
