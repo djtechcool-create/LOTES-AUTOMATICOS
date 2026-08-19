@@ -2,9 +2,6 @@ import time
 import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -41,17 +38,11 @@ class DaliClient:
             return True
 
         self._log("Pagina de login detectada, ingresando credenciales...")
-        user_input = self.driver.find_element(By.ID, "inputUser")
-        pass_input = self.driver.find_element(By.ID, "inputClave")
-        user_input.clear()
-        user_input.send_keys("azapata")
-        pass_input.clear()
-        pass_input.send_keys("1753112158")
+        self.driver.find_element(By.ID, "inputUser").send_keys("azapata")
+        self.driver.find_element(By.ID, "inputClave").send_keys("1753112158")
         time.sleep(0.5)
-
         self._log("Clickeando boton Ingresar...")
-        btn = self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-        btn.click()
+        self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
         time.sleep(5)
 
         if "inputUser" in self.driver.page_source:
@@ -91,99 +82,80 @@ class DaliClient:
         time.sleep(8)
         self._log(f"URL: {self.driver.current_url}")
 
-    def buscar_por_hojaruta(self, referencia):
-        self._log(f"Buscando HR: {referencia} via FlexiGrid UI...")
-        wait = WebDriverWait(self.driver, 10)
+    def buscar_y_seleccionar_egreso(self, referencia):
+        self._log(f"Buscando egreso con HR terminando en {referencia}...")
 
         grid_id = "procesaregresoshojaruta_flex_listaegresos"
 
-        try:
-            # 1. Click en el icono de busqueda (lupa)
-            search_toggle = wait.until(EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, f"#{grid_id} .pSearch")
-            ))
-            search_toggle.click()
-            time.sleep(1)
-            self._log("  Panel de busqueda abierto")
+        # Buscar en las filas del grid la HR que termine en la referencia
+        result = self.driver.execute_script(f"""
+            var rows = $('#{grid_id} tbody tr');
+            for (var i = 0; i < rows.length; i++) {{
+                var cells = $(rows[i]).find('td div');
+                for (var j = 0; j < cells.length; j++) {{
+                    var text = $(cells[j]).text().trim();
+                    if (text.indexOf('{referencia}') >= 0 && text.length > 8) {{
+                        $(rows[i]).trigger('click');
+                        return {{
+                            found: true,
+                            rowIndex: i,
+                            rowData: text
+                        }};
+                    }}
+                }}
+            }}
+            return {{ found: false }};
+        """)
 
-            # 2. Seleccionar "HOJA RUTA" en el combo de busqueda
-            search_select = wait.until(EC.presence_of_element_located(
-                (By.CSS_SELECTOR, f"#{grid_id} select[name='qtype']")
-            ))
-            # Buscar la opcion HOJ
-            self.driver.execute_script("""
-                var sel = arguments[0];
-                for (var i = 0; i < sel.options.length; i++) {
-                    if (sel.options[i].value === 'HOJ') {
-                        sel.selectedIndex = i;
-                        $(sel).trigger('change');
-                        break;
-                    }
-                }
-            """, search_select)
-            time.sleep(0.5)
-            self._log("  Filtro seleccionado: HOJA RUTA")
-
-            # 3. Escribir la referencia en el campo de busqueda
-            search_input = wait.until(EC.presence_of_element_located(
-                (By.CSS_SELECTOR, f"#{grid_id} input[name='q']")
-            ))
-            search_input.clear()
-            search_input.send_keys(str(referencia))
-            time.sleep(0.5)
-            self._log(f"  Texto buscado: {referencia}")
-
-            # 4. Presionar Enter para buscar
-            search_input.send_keys(Keys.RETURN)
-            self._log("  Enter presionado, esperando resultados...")
-            time.sleep(3)
-
-            # 5. Verificar si hay resultados
-            rows = self.driver.find_elements(
-                By.CSS_SELECTOR, f"#{grid_id} tbody tr"
-            )
-            data_rows = [r for r in rows if r.get_attribute("class") and "trSelected" in r.get_attribute("class") or len(r.find_elements(By.TAG_NAME, "td")) > 1]
-
-            # Contar filas con datos (no header)
-            count = self.driver.execute_script(f"""
-                return $('#{grid_id} tbody tr').length;
+        if not result or not result.get("found"):
+            self._log(f"  No se encontro fila con {referencia}")
+            # Mostrar todas las HR disponibles para debug
+            all_hrs = self.driver.execute_script(f"""
+                var hrs = [];
+                $('#{grid_id} tbody tr').each(function() {{
+                    var cells = $(this).find('td div');
+                    cells.each(function() {{
+                        var t = $(this).text().trim();
+                        if (t.indexOf('HRU') >= 0) hrs.push(t);
+                    }});
+                }});
+                return hrs;
             """)
-            self._log(f"  Filas de resultados: {count}")
+            self._log(f"  HRs disponibles en grid: {all_hrs}")
+            return False
 
-            if count == 0:
-                self._log(f"  No se encontraron resultados para {referencia}")
-                return None
+        self._log(f"  Fila encontrada y seleccionada (verde): {result.get('rowData')}")
+        time.sleep(1)
 
-            # 6. Seleccionar la primera fila (click para que se pinte de verde)
-            first_row = self.driver.execute_script(f"""
-                var row = $('#{grid_id} tbody tr')[0];
-                if (row) {{ $(row).trigger('click'); return true; }}
-                return false;
-            """)
-            time.sleep(1)
-            self._log("  Fila seleccionada (verde)")
+        # Click en boton "Ver"
+        self.driver.execute_script(f"""
+            var btns = $('#{grid_id} .pDiv .pButton');
+            btns.each(function() {{
+                var title = $(this).attr('title') || '';
+                var val = $(this).find('input').val() || '';
+                if (title === 'Ver' || val === 'Ver') {{
+                    $(this).trigger('click');
+                    return false;
+                }}
+            }});
+        """)
+        self._log("  Boton 'Ver' clickeado")
+        time.sleep(3)
+        return True
 
-            # 7. Click en boton "Ver"
-            ver_btn = wait.until(EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, f"#{grid_id} .pDiv .pButton[title='Ver'], #{grid_id} .pDiv input[value='Ver']")
-            ))
-            # Si no encuentra por titulo, buscar por clase
-            if not ver_btn:
-                ver_btn = wait.until(EC.element_to_be_clickable(
-                    (By.CSS_SELECTOR, f"#{grid_id} .view")
-                ))
-            ver_btn.click()
-            self._log("  Boton 'Ver' clickeado")
-            time.sleep(3)
-
-            return True
-
-        except Exception as e:
-            self._log(f"  ERROR en busqueda UI: {e}")
-            return None
-
-    def _js(self, script, *args):
-        return self.driver.execute_script(script, *args)
+    def get_egreso_actual(self):
+        self._log("Leyendo datos del egreso seleccionado...")
+        data = self.driver.execute_script("""
+            return {
+                mbocodigo: $('#procesaregresoshojaruta_codigo').val() || '',
+                hojaruta: $('#procesaregresoshojaruta_hojaruta').val() || '',
+                estado: $('#procesaregresoshojaruta_estado').val() || '',
+                dcaestado: $('#procesaregresoshojaruta_dcaestado').val() || '',
+                responsable: $('#procesaregresoshojaruta_responsableruta').val() || ''
+            };
+        """)
+        self._log(f"  MBO={data['mbocodigo']} HR={data['hojaruta']} Estado={data['estado']}")
+        return data
 
     def _ajax_json(self, endpoint, params=None):
         params = params or {}
@@ -202,108 +174,71 @@ class DaliClient:
             }});
             return result;
         """
-        return self._js(js)
+        return self.driver.execute_script(js)
 
-    def get_egreso_actual(self):
-        self._log("Leyendo datos del egreso seleccionado...")
-        mbo = self._js("return $('#procesaregresoshojaruta_codigo').val();")
-        hr = self._js("return $('#procesaregresoshojaruta_hojaruta').val();")
-        estado = self._js("return $('#procesaregresoshojaruta_estado').val();")
-        dcaestado = self._js("return $('#procesaregresoshojaruta_dcaestado').val();")
-        self._log(f"  MBO={mbo} HR={hr} Estado={estado} DCAEstado={dcaestado}")
-        return {
-            "mbocodigo": mbo,
-            "hojaruta": hr,
-            "estado": estado,
-            "dcaestado": dcaestado,
-        }
-
-    def cargar_productos_egreso(self):
-        self._log("Cargando productos del egreso...")
+    def cargar_productos_egreso(self, mbocodigo):
+        self._log(f"Cargando productos del egreso {mbocodigo}...")
         result = self._ajax_json("2094", {
-            "mbocodigo": self.get_egreso_actual()["mbocodigo"],
+            "mbocodigo": str(mbocodigo),
             "page": "1",
             "rp": "100"
         })
         productos = result.get("data", []) if result else []
         self._log(f"  {len(productos)} productos encontrados")
+        for p in productos:
+            self._log(f"    {p.get('PRODUCTO','')} DMB={p.get('DMB_CODIGO','')} Cant={p.get('CANTIDAD','')}")
         return productos
 
     def cargar_lotes_disponibles(self, dmbcodigo):
         result = self._ajax_json("2092", {"dmbcodigo": str(dmbcodigo)})
         return result.get("data", []) if result else []
 
-    def seleccionar_producto(self, dmb_codigo):
-        self._log(f"  Seleccionando producto DMB={dmb_codigo}...")
+    def click_producto(self, dmb_codigo):
+        self._log(f"  Click en producto DMB={dmb_codigo}...")
         self.driver.execute_script(f"""
             var rows = $('#procesaregresoshojaruta_flex_detalle_egreso tbody tr');
             rows.each(function() {{
                 var divs = $(this).find('td div');
                 for (var i = 0; i < divs.length; i++) {{
                     if ($(divs[i]).text().trim() === '{dmb_codigo}') {{
-                        $(this).trigger('click');
+                        $(this).find('td:first div').trigger('click');
                         return false;
                     }}
                 }}
             }});
         """)
-        time.sleep(1)
+        time.sleep(2)
 
-    def seleccionar_lote(self, ilocodigo):
-        self._log(f"  Seleccionando lote {ilocodigo}...")
+    def asignar_lote(self, ilocodigo, cantidad):
+        self._log(f"  Asignando lote={ilocodigo}, cant={cantidad}...")
         self.driver.execute_script(f"""
-            $('#procesaregresoshojaruta_lote').val('{ilocodigo}');
-        """)
-        time.sleep(0.5)
-
-    def asignar_lote_ui(self, ilocodigo, cantidad):
-        self._log(f"  Asignando lote {ilocodigo}, cantidad {cantidad}...")
-        # Seleccionar lote en el combo
-        self.driver.execute_script(f"""
-            $('#procesaregresoshojaruta_lote').val('{ilocodigo}');
+            $('#procesaregresoshojaruta_lote').val('{ilocodigo}').trigger('change');
             $('#procesaregresoshojaruta_cantidad').val('{cantidad}');
         """)
         time.sleep(0.5)
 
-        # Click en boton Agregar del flexigrid de lotes
+        # Click Agregar en el flexigrid de lotes
         self.driver.execute_script("""
             var btns = $('#procesaregresoshojaruta_flex_detalle_lote .pDiv .pButton');
             btns.each(function() {
-                if ($(this).hasClass('add') || $(this).find('input').val() === 'Agregar') {
+                var val = $(this).find('input').val() || '';
+                if (val === 'Agregar' || $(this).hasClass('add')) {
                     $(this).trigger('click');
                     return false;
                 }
             });
         """)
         time.sleep(2)
-        self._log("  Lote asignado")
+        self._log("  Lote asignado OK")
 
-    def seleccionar_producto_y_cargar_lotes(self, dmb_codigo):
-        self._log(f"  Clickeando producto DMB={dmb_codigo}...")
-        # Simular doble click en el producto del flexigrid
-        self.driver.execute_script(f"""
-            var rows = $('#procesaregresoshojaruta_flex_detalle_egreso tbody tr');
-            rows.each(function() {{
-                var hidden = $(this).find('td:has(div)');
-                var text = '';
-                hidden.find('div').each(function() {{ text += $(this).text().trim() + '|'; }});
-                if (text.indexOf('{dmb_codigo}') >= 0) {{
-                    $(this).find('td:first div').trigger('click');
-                    return false;
-                }}
-            }});
-        """)
-        time.sleep(2)
-
-    def procesar_egreso_ui(self):
-        self._log("Procesando egreso via UI...")
+    def procesar_egreso(self):
+        self._log("Procesando egreso...")
         self.driver.execute_script("""
             $('#procesaregresoshojaruta_procesar').trigger('click');
         """)
         time.sleep(2)
-        # Confirmar si aparece dialogo
         self.driver.execute_script("""
-            if ($('#confirmModalYes').length) {
+            if ($('#confirmModalYes').length && $('#confirmModalYes').is(':visible')) {
                 $('#confirmModalYes').trigger('click');
             }
         """)

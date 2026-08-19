@@ -81,8 +81,8 @@ def process_egresos(excel_path, selected_refs=None):
             excel_products = get_products_for_reference(df, ref)
             log_callback(f"  Productos en Excel: {len(excel_products)}")
 
-            # Buscar egreso via UI del FlexiGrid
-            found = client.buscar_por_hojaruta(ref)
+            # Buscar egreso en el grid (ya cargado)
+            found = client.buscar_y_seleccionar_egreso(ref)
             if not found:
                 log_callback(f"  ERROR: No se encontro egreso con HR={ref}")
                 results.append({
@@ -108,7 +108,7 @@ def process_egresos(excel_path, selected_refs=None):
                 continue
 
             # Cargar productos del egreso
-            dali_products = client.cargar_productos_egreso()
+            dali_products = client.cargar_productos_egreso(mbo_codigo)
             if not dali_products:
                 log_callback("  ERROR: Sin productos en el egreso")
                 results.append({
@@ -142,7 +142,7 @@ def process_egresos(excel_path, selected_refs=None):
                 pes = dali_prod["PES_CODIGO"]
 
                 # Seleccionar producto en el flexigrid para cargar sus lotes
-                client.seleccionar_producto_y_cargar_lotes(dmb)
+                client.click_producto(dmb)
                 time.sleep(1)
 
                 # Obtener lotes disponibles
@@ -174,7 +174,7 @@ def process_egresos(excel_path, selected_refs=None):
                 log_callback(f"    Lote: {chosen_t}")
 
                 # Asignar lote via UI
-                client.asignar_lote_ui(chosen_v, excel_cant)
+                client.asignar_lote(chosen_v, excel_cant)
                 assigned_count += 1
                 result_detail.append({
                     "excel": excel_name,
@@ -187,7 +187,7 @@ def process_egresos(excel_path, selected_refs=None):
             log_callback(f"  Asignados: {assigned_count}/{len(excel_products)}")
 
             if assigned_count > 0:
-                client.procesar_egreso_ui()
+                client.procesar_egreso()
                 results.append({
                     "referencia": ref,
                     "status": "ok",
