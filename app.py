@@ -181,10 +181,10 @@ def process_egresos(excel_path, selected_refs=None):
                             break
 
                     if chosen_v is None:
-                        log_callback(f"    Lote '{el}' no encontrado en lotes disponibles")
-                        fail_detail.append({
+                        log_callback(f"    Lote '{el}' no encontrado en lotes disponibles, saltando")
+                        sin_stock_detail.append({
                             "excel": excel_name, "dali": match_name,
-                            "dmb": dmb, "error": f"Lote '{el}' no encontrado en DALI"
+                            "dmb": dmb, "error": f"Lote '{el}' no existe en DALI"
                         })
                         continue
 
