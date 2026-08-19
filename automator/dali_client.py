@@ -34,7 +34,8 @@ class DaliClient:
         time.sleep(3)
 
         if "inputUser" not in self.driver.page_source:
-            self._log("Sesion ya activa o pagina diferente")
+            self._log("Sesion ya activa, esperando dashboard...")
+            self._wait_for_ui()
             self.logged_in = True
             return True
 
@@ -56,16 +57,26 @@ class DaliClient:
             self._log("ERROR: Login fallido")
             return False
 
-        self._log("Login exitoso!")
+        self._log("Login exitoso, esperando que UI se defina...")
+        self._wait_for_ui()
         self.logged_in = True
         return True
 
-    def navigate_to_egresos(self):
-        self._log("Navegando a Procesar Egreso por Ruta...")
-        url = f"{self.base}/?option=load&module=logistica&file=procesaregresohojaruta&type=html"
-        self.driver.get(url)
-        time.sleep(5)
-        self._log("Pagina de Procesar Egreso cargada")
+    def _wait_for_ui(self, timeout=30):
+        self._log("Esperando inicializacion de UI (tracker)...")
+        for i in range(timeout):
+            try:
+                is_defined = self.driver.execute_script(
+                    "return typeof UI !== 'undefined' && UI !== false && UI !== 0;"
+                )
+                if is_defined:
+                    uid = self.driver.execute_script("return UI;")
+                    self._log(f"UI definido: {uid}")
+                    return True
+            except Exception:
+                pass
+            time.sleep(1)
+        raise Exception("UI no se pudo definir despues de 30 segundos. Verifica conexion a DALI.")
 
     def _js(self, script, *args):
         return self.driver.execute_script(script, *args)

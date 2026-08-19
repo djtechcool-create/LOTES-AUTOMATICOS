@@ -54,10 +54,6 @@ def process_egresos(excel_path, selected_refs=None):
         if not client.login():
             raise Exception("No se pudo iniciar sesion en DALI")
 
-        log_callback("Navegando a Procesar Egreso por Ruta...")
-        client.navigate_to_egresos()
-        time.sleep(2)
-
         log_callback("Leyendo Excel...")
         df = read_excel(excel_path)
         all_refs = get_references(df)
