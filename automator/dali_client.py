@@ -133,6 +133,17 @@ class DaliClient:
         self._log(f"  {len(egresos)} egresos encontrados")
         return egresos
 
+    def buscar_egreso_por_hojaruta(self, referencia):
+        self._log(f"Buscando egreso por HOJA RUTA: {referencia}")
+        result = self._ajax_json("2093", {"q": str(referencia), "qtype": "HOJ"})
+        egresos = result.get("data", []) if result else []
+        self._log(f"  {len(egresos)} resultados para HR={referencia}")
+        for eg in egresos[:5]:
+            hr = eg.get("HOJARUTA", "N/A")
+            mbo = eg.get("MBO_CODIGO", "N/A")
+            self._log(f"    MBO={mbo} HR={hr}")
+        return egresos
+
     def cargar_egreso(self, mbocodigo):
         self._log(f"Cargando egreso {mbocodigo}...")
         result = self._ajax_json("2091", {"mbocodigo": str(mbocodigo)})

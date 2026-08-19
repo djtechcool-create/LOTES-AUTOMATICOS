@@ -83,13 +83,19 @@ def process_egresos(excel_path, selected_refs=None):
 
             egreso = find_reference_in_egresos(ref, egresos)
             if not egreso:
-                log_callback(f"  ERROR: No se encontro egreso con HR terminando en {ref}")
-                results.append({
-                    "referencia": ref,
-                    "status": "error",
-                    "error": "Egreso no encontrado en DALI",
-                })
-                continue
+                log_callback(f"  No encontrado en lista general, buscando por HOJA RUTA...")
+                search_results = client.buscar_egreso_por_hojaruta(ref)
+                egreso = find_reference_in_egresos(ref, search_results)
+                if egreso:
+                    log_callback(f"  Encontrado via busqueda HR")
+                else:
+                    log_callback(f"  ERROR: No se encontro egreso con HR terminando en {ref}")
+                    results.append({
+                        "referencia": ref,
+                        "status": "error",
+                        "error": "Egreso no encontrado en DALI",
+                    })
+                    continue
 
             mbo_codigo = egreso.get("MBO_CODIGO", "")
             log_callback(f"  Egreso: MBO={mbo_codigo}, HR={egreso.get('HOJARUTA', '')}")
