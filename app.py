@@ -4,19 +4,21 @@ import json
 import threading
 import queue
 import time
-import glob
 import shutil
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, render_template, request, jsonify, Response
-from config import FLASK_HOST, FLASK_PORT, EXCEL_DIR
+from config import FLASK_HOST, FLASK_PORT
 from automator.dali_client import DaliClient
-from automator.excel_reader import find_excel, read_excel, get_references, get_products_for_reference
+from automator.excel_reader import read_excel, get_references, get_products_for_reference
 from automator.matcher import match_product, find_reference_in_egresos
 from automator.report import generate_report
 
 app = Flask(__name__)
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "excels")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 processing_state = {
     "running": False,
@@ -39,13 +41,27 @@ def process_egresos(excel_path, selected_refs=None):
     state["progress"] = {"current": 0, "total": 0, "current_ref": ""}
     state["result"] = None
 
+    client = None
     try:
         log_callback("=== INICIANDO PROCESAMIENTO DE EGRESOS ===")
+        log_callback(f"Archivo: {os.path.basename(excel_path)}")
 
-        log_callback(f"Leyendo Excel: {os.path.basename(excel_path)}")
+        log_callback("Abriendo Google Chrome...")
+        client = DaliClient(on_log=log_callback)
+        client.start_browser()
+
+        log_callback("Ingresando a DALI...")
+        if not client.login():
+            raise Exception("No se pudo iniciar sesion en DALI")
+
+        log_callback("Navegando a Procesar Egreso por Ruta...")
+        client.navigate_to_egresos()
+        time.sleep(2)
+
+        log_callback("Leyendo Excel...")
         df = read_excel(excel_path)
         all_refs = get_references(df)
-        log_callback(f"Referencias encontradas: {len(all_refs)}")
+        log_callback(f"Referencias en Excel: {len(all_refs)}")
 
         if selected_refs:
             refs = [r for r in all_refs if r in selected_refs]
@@ -53,12 +69,7 @@ def process_egresos(excel_path, selected_refs=None):
         else:
             refs = all_refs
 
-        log_callback("Conectando a DALI...")
-        client = DaliClient(on_log=log_callback)
-        if not client.login():
-            raise Exception("No se pudo iniciar sesion en DALI")
-
-        log_callback("Listando egresos en DALI...")
+        log_callback("Obteniendo lista de egresos de DALI...")
         egresos = client.listar_egresos()
 
         results = []
@@ -69,14 +80,14 @@ def process_egresos(excel_path, selected_refs=None):
             state["progress"]["current_ref"] = ref
             state["queue"].put(("progress", state["progress"]))
 
-            log_callback(f"\n--- Procesando referencia {ref} ({i+1}/{len(refs)}) ---")
+            log_callback(f"\n--- Referencia {ref} ({i+1}/{len(refs)}) ---")
 
             excel_products = get_products_for_reference(df, ref)
             log_callback(f"  Productos en Excel: {len(excel_products)}")
 
             egreso = find_reference_in_egresos(ref, egresos)
             if not egreso:
-                log_callback(f"  ERROR: No se encontro egreso con Hoja de Ruta que termine en {ref}")
+                log_callback(f"  ERROR: No se encontro egreso con HR terminando en {ref}")
                 results.append({
                     "referencia": ref,
                     "status": "error",
@@ -85,131 +96,114 @@ def process_egresos(excel_path, selected_refs=None):
                 continue
 
             mbo_codigo = egreso.get("MBO_CODIGO", "")
-            log_callback(f"  Egreso encontrado: MBO_CODIGO={mbo_codigo}, Hoja Ruta={egreso.get('HOJARUTA', '')}")
+            log_callback(f"  Egreso: MBO={mbo_codigo}, HR={egreso.get('HOJARUTA', '')}")
 
             egreso_data = client.cargar_egreso(mbo_codigo)
             if egreso_data:
                 dcaestado = egreso_data[0].get("DCAESTADO")
                 if str(dcaestado) == "23":
-                    log_callback("  El egreso ya esta PROCESADO, saltando...")
+                    log_callback("  Ya PROCESADO, saltando...")
                     results.append({
                         "referencia": ref,
                         "status": "skip",
-                        "error": "Egreso ya procesado",
+                        "error": "Ya procesado",
                         "egreso_code": mbo_codigo,
                     })
                     continue
 
             dali_products = client.cargar_productos(mbo_codigo)
             if not dali_products:
-                log_callback(f"  ERROR: No se encontraron productos en DALI para egreso {mbo_codigo}")
+                log_callback(f"  ERROR: Sin productos en DALI")
                 results.append({
                     "referencia": ref,
                     "status": "error",
-                    "error": "No hay productos en DALI",
+                    "error": "Sin productos en DALI",
                     "egreso_code": mbo_codigo,
                 })
                 continue
 
             dali_names = [p["PRODUCTO"] for p in dali_products]
+            assigned_count = 0
             result_detail = []
             fail_detail = []
-            assigned_count = 0
 
             for excel_name, (excel_lote, excel_cant) in excel_products.items():
                 match_name, score, method = match_product(excel_name, dali_names)
-                log_callback(f"  Excel: {excel_name} -> DALI: {match_name} (score={score}, {method})")
+                log_callback(f"  {excel_name} -> {match_name} ({score}%, {method})")
 
                 if match_name is None:
-                    fail_detail.append({"excel": excel_name, "error": "Sin match fuzzy"})
+                    fail_detail.append({"excel": excel_name, "error": "Sin match"})
                     continue
 
                 dali_prod = next((p for p in dali_products if p["PRODUCTO"] == match_name), None)
                 if not dali_prod:
-                    fail_detail.append({"excel": excel_name, "error": "Producto no encontrado en egreso"})
+                    fail_detail.append({"excel": excel_name, "error": "No encontrado en egreso"})
                     continue
 
-                dmb_codigo = dali_prod["DMB_CODIGO"]
-                pge_codigo = dali_prod["PGE_CODIGO"]
-                pes_codigo = dali_prod["PES_CODIGO"]
+                dmb = dali_prod["DMB_CODIGO"]
+                available = client.cargar_lotes_disponibles(dmb)
 
-                available_lotes = client.cargar_lotes_disponibles(dmb_codigo)
-                log_callback(f"  Lotes disponibles: {len(available_lotes)}")
-
-                if not available_lotes:
-                    log_callback(f"  WARNING: No hay lotes disponibles para {match_name}")
-                    fail_detail.append({"excel": excel_name, "error": "Sin lotes disponibles"})
+                if not available:
+                    log_callback(f"    Sin lotes disponibles")
+                    fail_detail.append({"excel": excel_name, "error": "Sin lotes"})
                     continue
 
-                chosen_lote = None
-                chosen_ilocodigo = None
+                chosen_v = None
+                chosen_t = None
 
                 if excel_lote:
-                    excel_lote_str = str(excel_lote).strip()
-                    for lote in available_lotes:
-                        if str(lote.get("V", "")).strip() == excel_lote_str or excel_lote_str in str(lote.get("T", "")):
-                            chosen_lote = lote.get("T", lote.get("V", ""))
-                            chosen_ilocodigo = lote.get("V", "")
+                    el = str(excel_lote).strip()
+                    for lote in available:
+                        v = str(lote.get("V", "")).strip()
+                        t = str(lote.get("T", ""))
+                        if v == el or el in t:
+                            chosen_v = v
+                            chosen_t = t
                             break
 
-                if chosen_lote is None:
-                    chosen_lote = available_lotes[0].get("T", "")
-                    chosen_ilocodigo = available_lotes[0].get("V", "")
+                if chosen_v is None:
+                    chosen_v = str(available[0].get("V", ""))
+                    chosen_t = str(available[0].get("T", ""))
 
-                log_callback(f"  Lote seleccionado: {chosen_lote} (ilocodigo={chosen_ilocodigo})")
+                log_callback(f"    Lote: {chosen_t}")
 
-                ok = client.asignar_lote(
-                    dmborigen=dmb_codigo,
-                    dmbdestino=dmb_codigo,
-                    ilocodigo=chosen_ilocodigo,
-                    cantidad=excel_cant,
-                )
-
+                ok = client.asignar_lote(dmb, dmb, chosen_v, excel_cant)
                 if ok:
                     assigned_count += 1
                     result_detail.append({
                         "excel": excel_name,
                         "dali": match_name,
                         "score": score,
-                        "lote": chosen_lote,
+                        "lote": chosen_t,
                         "cantidad": excel_cant,
                     })
                 else:
-                    fail_detail.append({"excel": excel_name, "error": "Error al asignar lote"})
+                    fail_detail.append({"excel": excel_name, "error": "Error al asignar"})
 
             log_callback(f"  Asignados: {assigned_count}/{len(excel_products)}")
 
             if assigned_count > 0:
-                log_callback(f"  Procesando egreso {mbo_codigo}...")
                 proc_ok = client.procesar_egreso(mbo_codigo)
-                if proc_ok:
-                    results.append({
-                        "referencia": ref,
-                        "status": "ok",
-                        "egreso_code": mbo_codigo,
-                        "productos_asignados": assigned_count,
-                        "productos_detallado": result_detail,
-                    })
-                else:
-                    results.append({
-                        "referencia": ref,
-                        "status": "error",
-                        "error": "Error al procesar egreso",
-                        "egreso_code": mbo_codigo,
-                        "productos_fallidos": fail_detail,
-                    })
+                results.append({
+                    "referencia": ref,
+                    "status": "ok" if proc_ok else "error",
+                    "error": None if proc_ok else "Error al procesar",
+                    "egreso_code": mbo_codigo,
+                    "productos_asignados": assigned_count,
+                    "productos_detallado": result_detail,
+                })
             else:
                 results.append({
                     "referencia": ref,
                     "status": "error",
-                    "error": "Ningun producto pudo ser asignado",
+                    "error": "Ningun producto asignado",
                     "egreso_code": mbo_codigo,
                     "productos_fallidos": fail_detail,
                 })
 
         log_callback("\n=== GENERANDO REPORTE ===")
         report_path, report_content = generate_report(results, os.path.basename(excel_path))
-        log_callback(f"Reporte guardado en: {report_path}")
+        log_callback(f"Reporte: {report_path}")
 
         state["result"] = {
             "results": results,
@@ -232,14 +226,16 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/api/excels")
-def list_excels():
-    pattern = os.path.join(EXCEL_DIR, "KrezcoCargo Trazabilidad *.xlsx")
-    files = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
-    result = []
-    for f in files:
-        result.append({"name": os.path.basename(f), "path": f, "size": os.path.getsize(f)})
-    return jsonify(result)
+@app.route("/api/upload", methods=["POST"])
+def upload_excel():
+    if "file" not in request.files:
+        return jsonify({"error": "No se envio archivo"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Nombre vacio"}), 400
+    save_path = os.path.join(UPLOAD_DIR, f.filename)
+    f.save(save_path)
+    return jsonify({"path": save_path, "name": f.filename, "size": os.path.getsize(save_path)})
 
 
 @app.route("/api/references")
@@ -295,7 +291,7 @@ def stream():
                 elif msg_type == "progress":
                     yield f"data: {json.dumps({'type': 'progress', 'data': msg_data})}\n\n"
                 elif msg_type == "done":
-                    yield f"data: {json.dumps({'type': 'done', 'data': {'report_path': msg_data.get('report_path', '')}})}\n\n"
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
                     break
                 elif msg_type == "error":
                     yield f"data: {json.dumps({'type': 'error', 'message': msg_data})}\n\n"

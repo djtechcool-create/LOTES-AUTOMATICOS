@@ -13,6 +13,7 @@
         .btn-primary:hover { background: #2563eb; }
         .btn-success { background: #22c55e; border-color: #22c55e; }
         .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: #ef4444; border-color: #ef4444; }
         .log-box { background: #111318; border: 1px solid #363a45; border-radius: 6px;
                    padding: 12px; height: 400px; overflow-y: auto; font-family: 'Consolas', monospace;
                    font-size: 13px; line-height: 1.5; }
@@ -22,13 +23,19 @@
         .log-entry.info { color: #60a5fa; }
         .progress-container { height: 24px; }
         .ref-list { max-height: 300px; overflow-y: auto; }
-        .ref-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; }
+        .ref-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; user-select: none; }
         .ref-item:hover { background: #363a45; }
         .ref-item.selected { background: #1e3a5f; }
         h1 { font-size: 1.5rem; }
         .badge-ok { background: #22c55e; }
         .badge-err { background: #ef4444; }
         .badge-skip { background: #eab308; }
+        .file-drop { border: 2px dashed #363a45; border-radius: 8px; padding: 30px;
+                     text-align: center; cursor: pointer; transition: all 0.2s; }
+        .file-drop:hover, .file-drop.dragover { border-color: #3b82f6; background: #1e293b; }
+        .file-drop input[type="file"] { display: none; }
+        .chrome-note { background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+                       padding: 10px 14px; font-size: 13px; color: #94a3b8; }
     </style>
 </head>
 <body>
@@ -38,17 +45,36 @@
             <span class="badge bg-secondary">KrezcoCargo - DALI</span>
         </div>
 
+        <div class="chrome-note mb-3">
+            Chrome se abrira automaticamente. Podras ver todo lo que hace en tiempo real.
+            Si algo sale mal, revisa la ventana de Chrome.
+        </div>
+
         <div class="row g-3">
             <div class="col-md-5">
-                <div class="card">
+                <div class="card mb-3">
                     <div class="card-header">Archivo Excel</div>
                     <div class="card-body">
-                        <select id="excelSelect" class="form-select mb-3">
-                            <option value="">Cargando archivos...</option>
-                        </select>
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span id="refCount" class="text-muted">0 referencias</span>
-                            <button id="btnSelectAll" class="btn btn-sm btn-outline-secondary">Seleccionar todas</button>
+                        <div class="file-drop" id="fileDrop" onclick="document.getElementById('fileInput').click()">
+                            <input type="file" id="fileInput" accept=".xlsx,.xls" />
+                            <div id="fileDropText">
+                                <div style="font-size: 28px; margin-bottom: 8px;">+</div>
+                                Click aqui o arrastra tu Excel diario
+                            </div>
+                        </div>
+                        <div id="fileInfo" class="mt-2 text-muted small" style="display:none"></div>
+                    </div>
+                </div>
+
+                <div class="card" id="refCard" style="display:none">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Referencias</span>
+                        <span id="refCount" class="text-muted small">0</span>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="d-flex gap-2 mb-2">
+                            <button id="btnSelectAll" class="btn btn-sm btn-outline-secondary flex-fill">Todas</button>
+                            <button id="btnSelectNone" class="btn btn-sm btn-outline-secondary flex-fill">Ninguna</button>
                         </div>
                         <div id="refList" class="ref-list border rounded p-2"></div>
                     </div>
@@ -65,7 +91,9 @@
                         <div class="progress progress-container mb-3">
                             <div id="progressBar" class="progress-bar" style="width: 0%">0 / 0</div>
                         </div>
-                        <button id="btnProcess" class="btn btn-success w-100" disabled>INICIAR PROCESAMIENTO</button>
+                        <button id="btnProcess" class="btn btn-success w-100" disabled>
+                            INICIAR PROCESAMIENTO
+                        </button>
                     </div>
                 </div>
 
@@ -73,7 +101,7 @@
                     <div class="card-header">Log de Ejecucion</div>
                     <div class="card-body p-2">
                         <div id="logBox" class="log-box">
-                            <div class="log-entry info">Eslecciona un archivo Excel y presiona INICIAR...</div>
+                            <div class="log-entry info">Sube tu Excel y presiona INICIAR...</div>
                         </div>
                     </div>
                 </div>
@@ -89,33 +117,42 @@
     <script>
         let selectedRefs = new Set();
         let allRefs = [];
+        let currentExcelPath = null;
 
-        async function loadExcels() {
-            const res = await fetch('/api/excels');
+        const fileDrop = document.getElementById('fileDrop');
+        const fileInput = document.getElementById('fileInput');
+
+        fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+        fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+        fileDrop.addEventListener('drop', e => {
+            e.preventDefault();
+            fileDrop.classList.remove('dragover');
+            if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', () => { if (fileInput.files.length) uploadFile(fileInput.files[0]); });
+
+        async function uploadFile(file) {
+            document.getElementById('fileDropText').innerHTML = `<div class="spinner-border spinner-border-sm"></div> Subiendo ${file.name}...`;
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/upload', { method: 'POST', body: formData });
             const data = await res.json();
-            const sel = document.getElementById('excelSelect');
-            sel.innerHTML = '';
-            if (data.length === 0) {
-                sel.innerHTML = '<option value="">No se encontraron archivos Excel</option>';
-                return;
-            }
-            data.forEach(f => {
-                const opt = document.createElement('option');
-                opt.value = f.path;
-                opt.textContent = `${f.name} (${(f.size/1024).toFixed(0)} KB)`;
-                sel.appendChild(opt);
-            });
-            loadReferences(data[0].path);
+            if (data.error) { alert(data.error); return; }
+            currentExcelPath = data.path;
+            document.getElementById('fileDropText').innerHTML = `<strong>${data.name}</strong><br><span class="text-muted small">${(data.size/1024).toFixed(0)} KB</span>`;
+            document.getElementById('fileInfo').style.display = 'block';
+            loadReferences(data.path);
         }
 
         async function loadReferences(excelPath) {
-            if (!excelPath) return;
             const res = await fetch(`/api/references?excel=${encodeURIComponent(excelPath)}`);
             const data = await res.json();
             if (data.error) { alert(data.error); return; }
             allRefs = data.references;
             selectedRefs = new Set(allRefs);
+            document.getElementById('refCard').style.display = 'block';
             renderRefs();
+            updateBtn();
         }
 
         function renderRefs() {
@@ -129,55 +166,37 @@
                     if (selectedRefs.has(ref)) selectedRefs.delete(ref);
                     else selectedRefs.add(ref);
                     div.classList.toggle('selected');
-                    document.getElementById('refCount').textContent = `${selectedRefs.size} / ${allRefs.length} seleccionadas`;
+                    document.getElementById('refCount').textContent = `${selectedRefs.size} / ${allRefs.length}`;
                     updateBtn();
                 };
                 list.appendChild(div);
             });
-            document.getElementById('refCount').textContent = `${selectedRefs.size} / ${allRefs.length} seleccionadas`;
+            document.getElementById('refCount').textContent = `${selectedRefs.size} / ${allRefs.length}`;
         }
 
         function updateBtn() {
-            document.getElementById('btnProcess').disabled = selectedRefs.size === 0;
+            document.getElementById('btnProcess').disabled = selectedRefs.size === 0 || !currentExcelPath;
         }
 
-        document.getElementById('excelSelect').onchange = function() {
-            loadReferences(this.value);
-        };
-
-        document.getElementById('btnSelectAll').onclick = function() {
-            if (selectedRefs.size === allRefs.length) {
-                selectedRefs.clear();
-            } else {
-                selectedRefs = new Set(allRefs);
-            }
-            renderRefs();
-            updateBtn();
-        };
+        document.getElementById('btnSelectAll').onclick = () => { selectedRefs = new Set(allRefs); renderRefs(); updateBtn(); };
+        document.getElementById('btnSelectNone').onclick = () => { selectedRefs.clear(); renderRefs(); updateBtn(); };
 
         document.getElementById('btnProcess').onclick = async function() {
-            const excelPath = document.getElementById('excelSelect').value;
-            if (!excelPath) return;
-
+            if (!currentExcelPath) return;
             this.disabled = true;
             this.textContent = 'PROCESANDO...';
-            document.getElementById('statusBadge').textContent = 'Procesando';
-            document.getElementById('statusBadge').className = 'badge bg-warning';
+            document.getElementById('statusBadge').textContent = 'Procesando - mira Chrome';
+            document.getElementById('statusBadge').className = 'badge bg-warning text-dark';
             document.getElementById('resultCard').classList.add('d-none');
             document.getElementById('logBox').innerHTML = '';
 
             const res = await fetch('/api/process', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({excel: excelPath, refs: Array.from(selectedRefs)})
+                body: JSON.stringify({excel: currentExcelPath, refs: Array.from(selectedRefs)})
             });
             const data = await res.json();
-            if (data.error) {
-                alert(data.error);
-                resetBtn();
-                return;
-            }
-
+            if (data.error) { alert(data.error); resetBtn(); return; }
             startSSE();
         };
 
@@ -185,36 +204,13 @@
             const evtSource = new EventSource('/api/stream');
             evtSource.onmessage = function(event) {
                 const msg = JSON.parse(event.data);
-                if (msg.type === 'log') {
-                    addLog(msg.message);
-                } else if (msg.type === 'progress') {
-                    updateProgress(msg.data);
-                } else if (msg.type === 'done') {
-                    evtSource.close();
-                    document.getElementById('statusBadge').textContent = 'Completado';
-                    document.getElementById('statusBadge').className = 'badge bg-success';
-                    resetBtn();
-                } else if (msg.type === 'error') {
-                    addLog('ERROR: ' + msg.message);
-                    evtSource.close();
-                    document.getElementById('statusBadge').textContent = 'Error';
-                    document.getElementById('statusBadge').className = 'badge bg-danger';
-                    resetBtn();
-                } else if (msg.type === 'finished') {
-                    evtSource.close();
-                    if (document.getElementById('statusBadge').textContent === 'Procesando') {
-                        document.getElementById('statusBadge').textContent = 'Completado';
-                        document.getElementById('statusBadge').className = 'badge bg-success';
-                    }
-                    resetBtn();
-                    loadResults();
-                }
+                if (msg.type === 'log') addLog(msg.message);
+                else if (msg.type === 'progress') updateProgress(msg.data);
+                else if (msg.type === 'done') { evtSource.close(); finish('Completado', 'bg-success'); }
+                else if (msg.type === 'error') { addLog('ERROR: ' + msg.message); evtSource.close(); finish('Error', 'bg-danger'); }
+                else if (msg.type === 'finished') { evtSource.close(); finish('Listo', 'bg-secondary'); }
             };
-            evtSource.onerror = function() {
-                evtSource.close();
-                setTimeout(loadResults, 1000);
-                resetBtn();
-            };
+            evtSource.onerror = () => { evtSource.close(); setTimeout(loadResults, 1500); resetBtn(); };
         }
 
         function addLog(msg) {
@@ -222,7 +218,7 @@
             const div = document.createElement('div');
             div.className = 'log-entry';
             if (msg.includes('ERROR')) div.className += ' error';
-            else if (msg.includes('exitosamente') || msg.includes('PROCESADO')) div.className += ' success';
+            else if (msg.includes('exitosamente') || msg.includes('PROC') || msg.includes('OK')) div.className += ' success';
             else if (msg.startsWith('===') || msg.startsWith('---')) div.className += ' info';
             div.textContent = msg;
             box.appendChild(div);
@@ -232,7 +228,14 @@
         function updateProgress(data) {
             const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
             document.getElementById('progressBar').style.width = pct + '%';
-            document.getElementById('progressBar').textContent = `${data.current} / ${data.total} - Ref: ${data.current_ref}`;
+            document.getElementById('progressBar').textContent = `${data.current} / ${data.total} - ${data.current_ref}`;
+        }
+
+        function finish(text, cls) {
+            document.getElementById('statusBadge').textContent = text;
+            document.getElementById('statusBadge').className = 'badge ' + cls;
+            resetBtn();
+            loadResults();
         }
 
         function resetBtn() {
@@ -245,9 +248,7 @@
         async function loadResults() {
             const res = await fetch('/api/status');
             const data = await res.json();
-            if (data.result) {
-                showResults(data.result);
-            }
+            if (data.result) showResults(data.result);
         }
 
         function showResults(result) {
@@ -272,8 +273,6 @@
             document.getElementById('resultCard').classList.remove('d-none');
             document.getElementById('resultBody').innerHTML = html;
         }
-
-        loadExcels();
     </script>
 </body>
 </html>
