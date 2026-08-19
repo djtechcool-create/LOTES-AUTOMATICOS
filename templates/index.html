@@ -30,6 +30,7 @@
         .badge-ok { background: #22c55e; }
         .badge-err { background: #ef4444; }
         .badge-skip { background: #eab308; }
+        .badge-review { background: #8b5cf6; }
         .file-drop { border: 2px dashed #363a45; border-radius: 8px; padding: 30px;
                      text-align: center; cursor: pointer; transition: all 0.2s; }
         .file-drop:hover, .file-drop.dragover { border-color: #3b82f6; background: #1e293b; }
@@ -262,10 +263,12 @@
             const ok = results.filter(r => r.status === 'ok').length;
             const err = results.filter(r => r.status === 'error').length;
             const skip = results.filter(r => r.status === 'skip').length;
+            const review = results.filter(r => r.status === 'review').length;
             let html = `<div class="d-flex gap-3 mb-2">
                 <span class="badge badge-ok">OK: ${ok}</span>
                 <span class="badge badge-err">Error: ${err}</span>
                 <span class="badge badge-skip">Saltados: ${skip}</span>
+                <span class="badge badge-review">Revisar: ${review}</span>
             </div>`;
             if (result.report_path) {
                 html += `<div class="text-muted small mt-2">Reporte: ${result.report_path}</div>`;

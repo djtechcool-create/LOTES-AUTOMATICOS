@@ -123,6 +123,7 @@ def process_egresos(excel_path, selected_refs=None):
             assigned_count = 0
             result_detail = []
             fail_detail = []
+            sin_stock_detail = []
 
             for excel_name, (excel_lote, excel_cant) in excel_products.items():
                 match_name, score, method = match_product(excel_name, dali_names)
@@ -132,7 +133,6 @@ def process_egresos(excel_path, selected_refs=None):
                     fail_detail.append({"excel": excel_name, "error": "Sin match"})
                     continue
 
-                # Buscar TODOS los productos DALI que matcheen (pueden ser 2 con mismo nombre)
                 matching_prods = [p for p in dali_products if p["PRODUCTO"] == match_name]
                 if not matching_prods:
                     fail_detail.append({"excel": excel_name, "error": "No encontrado"})
@@ -146,11 +146,19 @@ def process_egresos(excel_path, selected_refs=None):
 
                     if saldo <= 0:
                         log_callback(f"    DMB={dmb} SALDO=0, saltando")
+                        sin_stock_detail.append({
+                            "excel": excel_name, "dali": match_name,
+                            "dmb": dmb, "error": "SALDO=0 en DALI"
+                        })
                         continue
 
                     available = client.cargar_lotes_disponibles(dmb)
                     if not available:
                         log_callback(f"    DMB={dmb} Sin lotes disponibles")
+                        fail_detail.append({
+                            "excel": excel_name, "dali": match_name,
+                            "dmb": dmb, "error": "Sin lotes disponibles"
+                        })
                         continue
 
                     chosen_v = None
@@ -169,21 +177,40 @@ def process_egresos(excel_path, selected_refs=None):
                         chosen_v = str(available[0].get("V", ""))
                         chosen_t = str(available[0].get("T", ""))
 
-                    log_callback(f"    DMB={dmb} Lote: {chosen_t} Cant: {saldo}")
-                    client.asignar_lote(dmb, chosen_v, saldo)
-                    assigned_count += 1
-                    result_detail.append({
-                        "excel": excel_name,
-                        "dali": match_name,
-                        "dmb": dmb,
-                        "score": score,
-                        "lote": chosen_t,
-                        "cantidad": saldo,
-                    })
+                    log_callback(f"    DMB={dmb} Lote: {chosen_t} (Saldo = {saldo}) Cant: {saldo}")
+                    ok = client.asignar_lote(dmb, chosen_v, saldo)
+                    if ok:
+                        assigned_count += 1
+                        result_detail.append({
+                            "excel": excel_name,
+                            "dali": match_name,
+                            "dmb": dmb,
+                            "score": score,
+                            "lote": chosen_t,
+                            "cantidad": saldo,
+                        })
+                    else:
+                        fail_detail.append({
+                            "excel": excel_name, "dali": match_name,
+                            "dmb": dmb, "lote": chosen_t,
+                            "error": "Error al asignar lote"
+                        })
 
             log_callback(f"  Asignados: {assigned_count}/{len(excel_products)}")
 
-            if assigned_count > 0:
+            all_saldo_cero = len(sin_stock_detail) > 0 and assigned_count == 0 and len(fail_detail) == 0
+
+            if all_saldo_cero:
+                log_callback("  >> Todos los productos con SALDO=0. Requiere revision/procesamiento.")
+                results.append({
+                    "referencia": ref,
+                    "status": "review",
+                    "error": "Todos los lotes con SALDO=0 - egreso ya tiene lotes asignados, requiere revision y procesamiento",
+                    "egreso_code": mbo_codigo,
+                    "productos_asignados": 0,
+                    "sin_stock": sin_stock_detail,
+                })
+            elif assigned_count > 0:
                 procesado = client.procesar_egreso()
                 if procesado and not fail_detail:
                     results.append({
@@ -197,7 +224,7 @@ def process_egresos(excel_path, selected_refs=None):
                     if not procesado:
                         reason.append("Proceso falllo en DALI")
                     if fail_detail:
-                        reason.append(f"{len(fail_detail)} productos sin asignar")
+                        reason.append(f"{len(fail_detail)} productos con errores")
                     results.append({
                         "referencia": ref,
                         "status": "error",
@@ -205,6 +232,7 @@ def process_egresos(excel_path, selected_refs=None):
                         "egreso_code": mbo_codigo,
                         "productos_asignados": assigned_count,
                         "productos_fallidos": fail_detail,
+                        "sin_stock": sin_stock_detail,
                     })
             else:
                 results.append({
@@ -213,6 +241,7 @@ def process_egresos(excel_path, selected_refs=None):
                     "error": "Ningun producto asignado",
                     "egreso_code": mbo_codigo,
                     "productos_fallidos": fail_detail,
+                    "sin_stock": sin_stock_detail,
                 })
 
         log_callback("\n=== GENERANDO REPORTE ===")

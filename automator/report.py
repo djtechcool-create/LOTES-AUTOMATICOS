@@ -15,8 +15,9 @@ def generate_report(results, excel_file):
     procesados = [r for r in results if r["status"] == "ok"]
     saltados = [r for r in results if r["status"] == "skip"]
     fallidos = [r for r in results if r["status"] == "error"]
+    revision = [r for r in results if r["status"] == "review"]
 
-    lines.append(f"\nOK: {len(procesados)} | SALTADOS: {len(saltados)} | ERRORES: {len(fallidos)}")
+    lines.append(f"\nOK: {len(procesados)} | SALTADOS: {len(saltados)} | ERRORES: {len(fallidos)} | REVISAR: {len(revision)}")
 
     if procesados:
         lines.append(f"\n--- OK ---")
@@ -30,6 +31,21 @@ def generate_report(results, excel_file):
             if "productos_fallidos" in r:
                 for pf in r["productos_fallidos"]:
                     lines.append(f"    - {pf['excel']}: {pf.get('error','?')}")
+            if "sin_stock" in r and r["sin_stock"]:
+                lines.append(f"    Sin stock / SALDO=0:")
+                for ss in r["sin_stock"]:
+                    lines.append(f"    - {ss['excel']}: {ss.get('error','?')} (DMB={ss.get('dmb','')})")
+
+    if revision:
+        lines.append(f"\n--- REVISAR (requieren procesamiento) ---")
+        lines.append(f"  Estos egresos ya tienen lotes asignados pero no fueron procesados.")
+        lines.append(f"  Revisar en DALI y ejecutar 'Procesar' manualmente.")
+        for r in revision:
+            lines.append(f"\n  {r['referencia']} (egreso: {r.get('egreso_code','?')})")
+            if "sin_stock" in r and r["sin_stock"]:
+                lines.append(f"    Productos con SALDO=0 (ya asignados):")
+                for ss in r["sin_stock"]:
+                    lines.append(f"    - {ss['excel']} -> {ss.get('dali','?')} (DMB={ss.get('dmb','')})")
 
     if saltados:
         lines.append(f"\n--- SALTADOS (ya procesados) ---")
