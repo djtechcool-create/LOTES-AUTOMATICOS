@@ -13,7 +13,7 @@ from flask import Flask, render_template, request, jsonify, Response
 from config import FLASK_HOST, FLASK_PORT
 from automator.dali_client import DaliClient
 from automator.excel_reader import read_excel, get_references, get_products_for_reference
-from automator.matcher import match_product, find_reference_in_egresos
+from automator.matcher import match_product
 from automator.report import generate_report
 
 app = Flask(__name__)
@@ -68,9 +68,6 @@ def process_egresos(excel_path, selected_refs=None):
         else:
             refs = all_refs
 
-        log_callback("Obteniendo lista de egresos de DALI...")
-        egresos = client.listar_egresos()
-
         results = []
         state["progress"]["total"] = len(refs)
 
@@ -84,45 +81,40 @@ def process_egresos(excel_path, selected_refs=None):
             excel_products = get_products_for_reference(df, ref)
             log_callback(f"  Productos en Excel: {len(excel_products)}")
 
-            egreso = find_reference_in_egresos(ref, egresos)
-            if not egreso:
-                log_callback(f"  No encontrado en lista general, buscando por HOJA RUTA...")
-                search_results = client.buscar_egreso_por_hojaruta(ref)
-                egreso = find_reference_in_egresos(ref, search_results)
-                if egreso:
-                    log_callback(f"  Encontrado via busqueda HR")
-                else:
-                    log_callback(f"  ERROR: No se encontro egreso con HR terminando en {ref}")
-                    results.append({
-                        "referencia": ref,
-                        "status": "error",
-                        "error": "Egreso no encontrado en DALI",
-                    })
-                    continue
-
-            mbo_codigo = egreso.get("MBO_CODIGO", "")
-            log_callback(f"  Egreso: MBO={mbo_codigo}, HR={egreso.get('HOJARUTA', '')}")
-
-            egreso_data = client.cargar_egreso(mbo_codigo)
-            if egreso_data:
-                dcaestado = egreso_data[0].get("DCAESTADO")
-                if str(dcaestado) == "23":
-                    log_callback("  Ya PROCESADO, saltando...")
-                    results.append({
-                        "referencia": ref,
-                        "status": "skip",
-                        "error": "Ya procesado",
-                        "egreso_code": mbo_codigo,
-                    })
-                    continue
-
-            dali_products = client.cargar_productos(mbo_codigo)
-            if not dali_products:
-                log_callback(f"  ERROR: Sin productos en DALI")
+            # Buscar egreso via UI del FlexiGrid
+            found = client.buscar_por_hojaruta(ref)
+            if not found:
+                log_callback(f"  ERROR: No se encontro egreso con HR={ref}")
                 results.append({
                     "referencia": ref,
                     "status": "error",
-                    "error": "Sin productos en DALI",
+                    "error": "Egreso no encontrado en DALI",
+                })
+                continue
+
+            # Leer datos del egreso cargado
+            egreso = client.get_egreso_actual()
+            mbo_codigo = egreso["mbocodigo"]
+            log_callback(f"  Egreso cargado: MBO={mbo_codigo} HR={egreso['hojaruta']}")
+
+            if str(egreso.get("dcaestado")) == "23":
+                log_callback("  Ya PROCESADO, saltando...")
+                results.append({
+                    "referencia": ref,
+                    "status": "skip",
+                    "error": "Ya procesado",
+                    "egreso_code": mbo_codigo,
+                })
+                continue
+
+            # Cargar productos del egreso
+            dali_products = client.cargar_productos_egreso()
+            if not dali_products:
+                log_callback("  ERROR: Sin productos en el egreso")
+                results.append({
+                    "referencia": ref,
+                    "status": "error",
+                    "error": "Sin productos",
                     "egreso_code": mbo_codigo,
                 })
                 continue
@@ -142,10 +134,18 @@ def process_egresos(excel_path, selected_refs=None):
 
                 dali_prod = next((p for p in dali_products if p["PRODUCTO"] == match_name), None)
                 if not dali_prod:
-                    fail_detail.append({"excel": excel_name, "error": "No encontrado en egreso"})
+                    fail_detail.append({"excel": excel_name, "error": "No encontrado"})
                     continue
 
                 dmb = dali_prod["DMB_CODIGO"]
+                pge = dali_prod["PGE_CODIGO"]
+                pes = dali_prod["PES_CODIGO"]
+
+                # Seleccionar producto en el flexigrid para cargar sus lotes
+                client.seleccionar_producto_y_cargar_lotes(dmb)
+                time.sleep(1)
+
+                # Obtener lotes disponibles
                 available = client.cargar_lotes_disponibles(dmb)
 
                 if not available:
@@ -153,6 +153,7 @@ def process_egresos(excel_path, selected_refs=None):
                     fail_detail.append({"excel": excel_name, "error": "Sin lotes"})
                     continue
 
+                # Seleccionar lote
                 chosen_v = None
                 chosen_t = None
 
@@ -172,27 +173,24 @@ def process_egresos(excel_path, selected_refs=None):
 
                 log_callback(f"    Lote: {chosen_t}")
 
-                ok = client.asignar_lote(dmb, dmb, chosen_v, excel_cant)
-                if ok:
-                    assigned_count += 1
-                    result_detail.append({
-                        "excel": excel_name,
-                        "dali": match_name,
-                        "score": score,
-                        "lote": chosen_t,
-                        "cantidad": excel_cant,
-                    })
-                else:
-                    fail_detail.append({"excel": excel_name, "error": "Error al asignar"})
+                # Asignar lote via UI
+                client.asignar_lote_ui(chosen_v, excel_cant)
+                assigned_count += 1
+                result_detail.append({
+                    "excel": excel_name,
+                    "dali": match_name,
+                    "score": score,
+                    "lote": chosen_t,
+                    "cantidad": excel_cant,
+                })
 
             log_callback(f"  Asignados: {assigned_count}/{len(excel_products)}")
 
             if assigned_count > 0:
-                proc_ok = client.procesar_egreso(mbo_codigo)
+                client.procesar_egreso_ui()
                 results.append({
                     "referencia": ref,
-                    "status": "ok" if proc_ok else "error",
-                    "error": None if proc_ok else "Error al procesar",
+                    "status": "ok",
                     "egreso_code": mbo_codigo,
                     "productos_asignados": assigned_count,
                     "productos_detallado": result_detail,
