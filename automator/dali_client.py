@@ -53,8 +53,11 @@ class DaliClient:
         btn.click()
         time.sleep(5)
 
+        url = self.driver.current_url
+        self._log(f"URL despues del login: {url}")
+
         if "inputUser" in self.driver.page_source:
-            self._log("ERROR: Login fallido")
+            self._log("ERROR: Login fallido, sigue en pagina de login")
             return False
 
         self._log("Login exitoso, esperando que UI se defina...")
@@ -76,7 +79,30 @@ class DaliClient:
             except Exception:
                 pass
             time.sleep(1)
-        raise Exception("UI no se pudo definir despues de 30 segundos. Verifica conexion a DALI.")
+        self._log("UI no se definio solo, intentando tracker manual...")
+        try:
+            self.driver.execute_script("""
+                $.ajax({
+                    url: '/tracker/?' + new Date().getTime(),
+                    data: {gmapk: '1'},
+                    type: 'POST',
+                    dataType: 'json',
+                    async: false,
+                    success: function(data) {
+                        if (data && data.data && data.data[0] && data.data[0].u) {
+                            UI = data.data[0].u * 1;
+                        }
+                    }
+                });
+            """)
+            time.sleep(2)
+            uid = self.driver.execute_script("return UI;")
+            if uid and uid is not False:
+                self._log(f"UI obtenido via tracker manual: {uid}")
+                return True
+        except Exception as e:
+            self._log(f"Tracker manual fallo: {e}")
+        raise Exception("UI no se pudo definir. Verifica conexion a DALI.")
 
     def _js(self, script, *args):
         return self.driver.execute_script(script, *args)
