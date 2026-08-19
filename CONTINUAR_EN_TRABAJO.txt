@@ -6,10 +6,9 @@ Copia y pega TODO este texto en OpenCode en la PC del trabajo.
 
 --------------------------------------------------------------------------------
 
-Hola, necesito que leas este archivo para entender el proyecto y luego ejecutes
-los pasos que se indican al final. El archivo completo esta en:
-
-C:\Users\alfon\OneDrive - Krezcocargo SAS\OTRO\APPS\LASF\CONTINUAR_EN_TRABAJO.txt
+INSTRUCCION IMPORTANTE: Lee TODO este archivo, entiende el proyecto, y ESPERA.
+NO modifiques nada. NO ejecutes git pull. NO toques archivos. Solo lee y entiende.
+Cuando yo te pida algo, ahi si actua.
 
 --------------------------------------------------------------------------------
 CONTEXTO DEL PROYECTO
@@ -85,35 +84,11 @@ ESTADOS DEL REPORTE:
   requieren solo que el usuario revise y ejecute "Procesar" en DALI)
 
 --------------------------------------------------------------------------------
-PASOS A EJECUTAR AHORA
+FIN - LEER Y ENTENDER, NO MODIFICAR NADA
 --------------------------------------------------------------------------------
 
-1. Actualizar el repositorio:
-   git pull
-
-2. Verificar que todo este actualizado:
-   git log --oneline -5
-   git status
-
-3. Verificar que las dependencias esten instaladas:
-   pip install flask selenium pandas openpyxl fuzzywuzzy python-Levenshtein
-
-4. Probar que la app arranca:
-   python app.py
-
-5. Abrir el navegador en http://localhost:5000
-
-6. Subir el Excel del dia y probar con pocas referencias primero (5-10)
-
-7. Si hay errores, revisar los archivos de investigacion que estan en la raiz:
-   - dali_procesar_egreso.js (el mas importante, explica como funciona DALI)
-   - dali_generar_egreso.js
-   - dali_core.js
-
-8. Si todo funciona bien, hacer commit y push:
-   git add .
-   git commit -m "descripcion del cambio"
-   git push
+Una vez que leas todo esto, decime "Listo, ya entendí el proyecto" y esperá
+a que yo te pida algo. NO hagas nada por tu cuenta.
 
 --------------------------------------------------------------------------------
 NOTAS ADICIONALES
