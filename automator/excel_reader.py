@@ -34,11 +34,16 @@ def get_products_for_reference(df_salidas, referencia):
     products = {}
     for _, row in ex.iterrows():
         nombre = str(row["Producto"]).strip().upper()
-        lote = row["Lote"] if pd.notna(row["Lote"]) else None
+        lote_raw = row["Lote"] if pd.notna(row["Lote"]) else None
+        if lote_raw is not None:
+            lote_str = str(lote_raw).strip()
+            lote = lote_str if lote_str else None
+        else:
+            lote = None
         cantidad = int(row["Cantidad"])
         if nombre in products:
             prev_lote, prev_cant = products[nombre]
-            products[nombre] = (lote or prev_lote, prev_cant + cantidad)
+            products[nombre] = (lote, prev_cant + cantidad)
         else:
             products[nombre] = (lote, cantidad)
     return products

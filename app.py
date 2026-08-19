@@ -126,8 +126,9 @@ def process_egresos(excel_path, selected_refs=None):
             sin_stock_detail = []
 
             for excel_name, (excel_lote, excel_cant) in excel_products.items():
+                lote_display = excel_lote if excel_lote else "SIN LOTE"
                 match_name, score, method = match_product(excel_name, dali_names)
-                log_callback(f"  {excel_name} -> {match_name} ({score}%, {method})")
+                log_callback(f"  {excel_name} -> {match_name} ({score}%, {method}) LoteExcel={lote_display}")
 
                 if match_name is None:
                     fail_detail.append({"excel": excel_name, "error": "Sin match"})
