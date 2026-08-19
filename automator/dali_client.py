@@ -88,6 +88,7 @@ class DaliClient:
         grid_id = "procesaregresoshojaruta_flex_listaegresos"
 
         # Buscar en las filas del grid la HR que termine en la referencia
+        # y extraer el MBO_CODIGO (ultimo td oculto)
         result = self.driver.execute_script(f"""
             var rows = $('#{grid_id} tbody tr');
             for (var i = 0; i < rows.length; i++) {{
@@ -95,11 +96,18 @@ class DaliClient:
                 for (var j = 0; j < cells.length; j++) {{
                     var text = $(cells[j]).text().trim();
                     if (text.indexOf('{referencia}') >= 0 && text.length > 8) {{
+                        // El MBO_CODIGO esta en el ultimo td (oculto)
+                        var lastDiv = $(rows[i]).find('td:last div');
+                        var mbo = lastDiv.text().trim();
+                        // Tambien intentar desde el id de la fila
+                        var rowId = $(rows[i]).attr('id');
                         $(rows[i]).trigger('click');
                         return {{
                             found: true,
                             rowIndex: i,
-                            rowData: text
+                            rowData: text,
+                            mbocodigo: mbo,
+                            rowId: rowId
                         }};
                     }}
                 }}
@@ -109,7 +117,6 @@ class DaliClient:
 
         if not result or not result.get("found"):
             self._log(f"  No se encontro fila con {referencia}")
-            # Mostrar todas las HR disponibles para debug
             all_hrs = self.driver.execute_script(f"""
                 var hrs = [];
                 $('#{grid_id} tbody tr').each(function() {{
@@ -124,24 +131,42 @@ class DaliClient:
             self._log(f"  HRs disponibles en grid: {all_hrs}")
             return False
 
-        self._log(f"  Fila encontrada y seleccionada (verde): {result.get('rowData')}")
+        self._log(f"  Fila encontrada: {result.get('rowData')}")
+        self._log(f"  MBO_CODIGO: {result.get('mbocodigo')}")
         time.sleep(1)
 
-        # Click en boton "Ver"
-        self.driver.execute_script(f"""
-            var btns = $('#{grid_id} .pDiv .pButton');
-            btns.each(function() {{
-                var title = $(this).attr('title') || '';
-                var val = $(this).find('input').val() || '';
-                if (title === 'Ver' || val === 'Ver') {{
-                    $(this).trigger('click');
-                    return false;
-                }}
-            }});
-        """)
-        self._log("  Boton 'Ver' clickeado")
-        time.sleep(3)
-        return True
+        # Cargar datos del egreso directamente via JSON 2091
+        mbo = result.get("mbocodigo", "")
+        if mbo:
+            self._log(f"  Cargando egreso via JSON 2091...")
+            egreso_data = self._ajax_json("2091", {"mbocodigo": str(mbo)})
+            if egreso_data and egreso_data.get("data"):
+                d = egreso_data["data"][0]
+                # Llenar los campos del formulario via JS
+                self.driver.execute_script(f"""
+                    $('#procesaregresoshojaruta_codigo').val('{d.get("MBOCODIGO", "")}');
+                    $('#procesaregresoshojaruta_secuencial').val('{d.get("SECUENCIAL", "")}');
+                    $('#procesaregresoshojaruta_fecha').val('{d.get("FECHA", "")}');
+                    $('#procesaregresoshojaruta_bodega').val('{d.get("BODEGA", "")}');
+                    $('#procesaregresoshojaruta_orden').val('{d.get("ORDEN", "")}');
+                    $('#procesaregresoshojaruta_dia').val('{d.get("DIA", "")}');
+                    $('#procesaregresoshojaruta_placa').val('{d.get("PLACA", "")}');
+                    $('#procesaregresoshojaruta_descripciontransporte').val('{d.get("DESCRIPCIONTRANSPORTE", "")}');
+                    $('#procesaregresoshojaruta_hojaruta').val('{d.get("HOJARUTA", "")}');
+                    $('#procesaregresoshojaruta_descripcionhojaruta').val('{d.get("DESCRIPCIONHOJARUTA", "")}');
+                    $('#procesaregresoshojaruta_responsableruta').val('{d.get("RESPONSABLE", "")}');
+                    $('#procesaregresoshojaruta_estado').val('{d.get("ESTADO", "")}');
+                    $('#procesaregresoshojaruta_observacion').val('{d.get("OBSERVACION", "")}');
+                    $('#procesaregresoshojaruta_dcaestado').val('{d.get("DCAESTADO", "")}');
+                """)
+                self._log(f"  Egreso cargado via JSON: HR={d.get('HOJARUTA','')}")
+                return True
+            else:
+                self._log(f"  JSON 2091 no devolvio datos para MBO={mbo}")
+                return False
+        else:
+            self._log(f"  No se pudo obtener MBO_CODIGO de la fila")
+            return False
 
     def get_egreso_actual(self):
         self._log("Leyendo datos del egreso seleccionado...")
@@ -193,57 +218,48 @@ class DaliClient:
         result = self._ajax_json("2092", {"dmbcodigo": str(dmbcodigo)})
         return result.get("data", []) if result else []
 
-    def click_producto(self, dmb_codigo):
-        self._log(f"  Click en producto DMB={dmb_codigo}...")
-        self.driver.execute_script(f"""
-            var rows = $('#procesaregresoshojaruta_flex_detalle_egreso tbody tr');
-            rows.each(function() {{
-                var divs = $(this).find('td div');
-                for (var i = 0; i < divs.length; i++) {{
-                    if ($(divs[i]).text().trim() === '{dmb_codigo}') {{
-                        $(this).find('td:first div').trigger('click');
-                        return false;
-                    }}
-                }}
-            }});
-        """)
-        time.sleep(2)
+    def click_producto(self, dmb_codigo, pge, pes):
+        self._log(f"  Seleccionando producto DMB={dmb_codigo}...")
+        mbo = self.driver.execute_script("return $('#procesaregresoshojaruta_codigo').val() || '';")
+        if mbo:
+            result = self._ajax_json("2095", {
+                "mbocodigo": str(mbo),
+                "pgecodigo": str(pge),
+                "pescodigo": str(pes)
+            })
+            lotes_asignados = result.get("data", []) if result else []
+            self._log(f"  Lotes ya asignados: {len(lotes_asignados)}")
+            return lotes_asignados
+        return []
 
-    def asignar_lote(self, ilocodigo, cantidad):
-        self._log(f"  Asignando lote={ilocodigo}, cant={cantidad}...")
-        self.driver.execute_script(f"""
-            $('#procesaregresoshojaruta_lote').val('{ilocodigo}').trigger('change');
-            $('#procesaregresoshojaruta_cantidad').val('{cantidad}');
-        """)
-        time.sleep(0.5)
-
-        # Click Agregar en el flexigrid de lotes
-        self.driver.execute_script("""
-            var btns = $('#procesaregresoshojaruta_flex_detalle_lote .pDiv .pButton');
-            btns.each(function() {
-                var val = $(this).find('input').val() || '';
-                if (val === 'Agregar' || $(this).hasClass('add')) {
-                    $(this).trigger('click');
-                    return false;
-                }
-            });
-        """)
-        time.sleep(2)
-        self._log("  Lote asignado OK")
+    def asignar_lote(self, dmb_origen, ilocodigo, cantidad):
+        self._log(f"  Asignando lote via JSON 2096: DMB={dmb_origen}, ILO={ilocodigo}, cant={cantidad}...")
+        result = self._ajax_json("2096", {
+            "dmborigen": str(dmb_origen),
+            "dmbdestino": "NULL",
+            "ilocodigo": str(ilocodigo),
+            "cantidad": str(cantidad)
+        })
+        if result and result.get("data") and result["data"][0].get("MSG") == "ok":
+            self._log("  Lote asignado OK")
+            return True
+        else:
+            msg = result.get("data", [{}])[0].get("MSG", "error desconocido") if result else "sin respuesta"
+            self._log(f"  ERROR asignando lote: {msg}")
+            return False
 
     def procesar_egreso(self):
-        self._log("Procesando egreso...")
-        self.driver.execute_script("""
-            $('#procesaregresoshojaruta_procesar').trigger('click');
-        """)
-        time.sleep(2)
-        self.driver.execute_script("""
-            if ($('#confirmModalYes').length && $('#confirmModalYes').is(':visible')) {
-                $('#confirmModalYes').trigger('click');
-            }
-        """)
-        time.sleep(3)
-        self._log("  Egreso procesado")
+        self._log("Procesando egreso via JSON 2099...")
+        mbo = self.driver.execute_script("return $('#procesaregresoshojaruta_codigo').val() || '';")
+        result = self._ajax_json("2099", {"mbocodigo": str(mbo)})
+        if result and result.get("data") and result["data"][0].get("MSG") == "ok":
+            self.driver.execute_script("$('#procesaregresoshojaruta_estado').val('PROCESADO');")
+            self._log("  Egreso PROCESADO OK")
+            return True
+        else:
+            msg = result.get("data", [{}])[0].get("MSG", "error desconocido") if result else "sin respuesta"
+            self._log(f"  ERROR procesando: {msg}")
+            return False
 
     def close(self):
         if self.driver:

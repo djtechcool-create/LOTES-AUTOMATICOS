@@ -97,7 +97,7 @@ def process_egresos(excel_path, selected_refs=None):
             mbo_codigo = egreso["mbocodigo"]
             log_callback(f"  Egreso cargado: MBO={mbo_codigo} HR={egreso['hojaruta']}")
 
-            if str(egreso.get("dcaestado")) == "23":
+            if str(egreso.get("estado", "")).upper() == "PROCESADO":
                 log_callback("  Ya PROCESADO, saltando...")
                 results.append({
                     "referencia": ref,
@@ -141,10 +141,6 @@ def process_egresos(excel_path, selected_refs=None):
                 pge = dali_prod["PGE_CODIGO"]
                 pes = dali_prod["PES_CODIGO"]
 
-                # Seleccionar producto en el flexigrid para cargar sus lotes
-                client.click_producto(dmb)
-                time.sleep(1)
-
                 # Obtener lotes disponibles
                 available = client.cargar_lotes_disponibles(dmb)
 
@@ -173,8 +169,8 @@ def process_egresos(excel_path, selected_refs=None):
 
                 log_callback(f"    Lote: {chosen_t}")
 
-                # Asignar lote via UI
-                client.asignar_lote(chosen_v, excel_cant)
+                # Asignar lote via JSON directo
+                client.asignar_lote(dmb, chosen_v, excel_cant)
                 assigned_count += 1
                 result_detail.append({
                     "excel": excel_name,
