@@ -31,3 +31,4 @@ dali_login_fail.html
 dali_custom.js
 mapping.json
 reportes/
+*.xlsx
