@@ -2,8 +2,6 @@ import time
 import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -53,11 +51,8 @@ class DaliClient:
         btn.click()
         time.sleep(5)
 
-        url = self.driver.current_url
-        self._log(f"URL despues del login: {url}")
-
         if "inputUser" in self.driver.page_source:
-            self._log("ERROR: Login fallido, sigue en pagina de login")
+            self._log("ERROR: Login fallido")
             return False
 
         self._log("Login exitoso, esperando que UI se defina...")
@@ -79,7 +74,7 @@ class DaliClient:
             except Exception:
                 pass
             time.sleep(1)
-        self._log("UI no se definio solo, intentando tracker manual...")
+        self._log("UI no se definio, intentando tracker manual...")
         try:
             self.driver.execute_script("""
                 $.ajax({
@@ -103,6 +98,15 @@ class DaliClient:
         except Exception as e:
             self._log(f"Tracker manual fallo: {e}")
         raise Exception("UI no se pudo definir. Verifica conexion a DALI.")
+
+    def navigate_to_egresos(self):
+        self._log("Navegando a Procesar Egreso por Ruta...")
+        url = f"{self.base}/?option=load&module=logistica&file=procesaregresohojaruta&type=html"
+        self.driver.get(url)
+        time.sleep(5)
+        self._log("Pagina de Procesar Egreso cargada")
+        self._wait_for_ui()
+        self._log(f"URL: {self.driver.current_url}")
 
     def _js(self, script, *args):
         return self.driver.execute_script(script, *args)
@@ -131,7 +135,7 @@ class DaliClient:
         result = self._ajax_json("2093", {"page": "1", "rp": "200"})
         egresos = result.get("data", []) if result else []
         self._log(f"  {len(egresos)} egresos encontrados")
-        for eg in egresos[:3]:
+        for eg in egresos[:5]:
             hr = eg.get("HOJARUTA", "N/A")
             mbo = eg.get("MBO_CODIGO", "N/A")
             est = eg.get("ESTADO", "N/A")
