@@ -87,8 +87,22 @@ class DaliClient:
 
         grid_id = "procesaregresoshojaruta_flex_listaegresos"
 
+        # Usar flexOptions para buscar por HOJA RUTA y luego flexReload
+        self.driver.execute_script(f"""
+            var grid = $('#{grid_id}');
+            grid.flexOptions({{
+                params: [
+                    {{name: 'json', value: 2093}},
+                    {{name: 'uid', value: UI}},
+                    {{name: 'qtype', value: 'HOJ'}},
+                    {{name: 'query', value: '{referencia}'}}
+                ]
+            }});
+            grid.flexReload();
+        """)
+        time.sleep(5)
+
         # Buscar en las filas del grid la HR que termine en la referencia
-        # y extraer el MBO_CODIGO (ultimo td oculto)
         result = self.driver.execute_script(f"""
             var rows = $('#{grid_id} tbody tr');
             for (var i = 0; i < rows.length; i++) {{
@@ -96,18 +110,14 @@ class DaliClient:
                 for (var j = 0; j < cells.length; j++) {{
                     var text = $(cells[j]).text().trim();
                     if (text.indexOf('{referencia}') >= 0 && text.length > 8) {{
-                        // El MBO_CODIGO esta en el ultimo td (oculto)
                         var lastDiv = $(rows[i]).find('td:last div');
                         var mbo = lastDiv.text().trim();
-                        // Tambien intentar desde el id de la fila
-                        var rowId = $(rows[i]).attr('id');
                         $(rows[i]).trigger('click');
                         return {{
                             found: true,
                             rowIndex: i,
                             rowData: text,
-                            mbocodigo: mbo,
-                            rowId: rowId
+                            mbocodigo: mbo
                         }};
                     }}
                 }}
